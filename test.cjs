@@ -60,6 +60,17 @@ function makeEl(tag) {
     },
     setAttribute(name, value) { this.attrs.set(name, String(value)); },
     getAttribute(name) { return this.attrs.has(name) ? this.attrs.get(name) : null; },
+    set innerHTML(html) {
+      this.children = [];
+      const re = /<span class="([^"]+)">([^<]*)<\/span>/g;
+      let m;
+      while ((m = re.exec(html))) {
+        const span = makeEl("span");
+        span.classList.set.add(m[1]);
+        span.textContent = m[2];
+        this.children.push(span);
+      }
+    },
     addEventListener(ev, fn) { (this.handlers[ev] ||= []).push(fn); },
     appendChild(el2) { el2.parentNode = this; this.children.push(el2); return el2; },
     contains(el2) { return el2 === this || this.children.includes(el2); },
@@ -68,6 +79,11 @@ function makeEl(tag) {
       if (!m) return [];
       const [tag, attr] = [m[1], m[2]];
       return this.children.filter((c) => c.tagName === tag && c.getAttribute(attr) !== null);
+    },
+    querySelector(sel) {
+      const m = /^\.([a-zA-Z0-9_-]+)$/.exec(sel);
+      if (!m) return null;
+      return this.children.find((c) => c.classList.set.has(m[1])) || null;
     },
     click() {
       const ev = { target: this, stopPropagation() {} };
@@ -91,6 +107,57 @@ const layoutService = {
   closeDetails() {
     log.push("layout.closeDetails");
     detailsClosed = true;
+  },
+};
+
+/* ---- fake locale service: mirrors the app's LocaleRuntime contract ---- */
+const localeListeners = new Set();
+let activeLocale = "zh";
+/* Smoke-test mirrors of the bundle's dictionaries (keep in sync with
+ * lib/client.js — the bundle keeps its own copies). */
+const localeDicts = {
+  zh: {
+    "tier.standard": "标准",
+    "tier.medium": "中等",
+    "tier.wide": "宽",
+    "tier.ultra": "超宽",
+    "tier.full": "全宽",
+    "button.aria": "对话区宽度档位：{label}（{value}），点击选择档位",
+    "button.title.summary": "对话区宽度档位：{label}（{value}）",
+    "button.title.hint": "点击选择：{list}",
+  },
+  en: {
+    "tier.standard": "Standard",
+    "tier.medium": "Medium",
+    "tier.wide": "Wide",
+    "tier.ultra": "Ultra",
+    "tier.full": "Full",
+    "button.aria": "Chat width tier: {label} ({value}). Click to choose a tier.",
+    "button.title.summary": "Chat width tier: {label} ({value})",
+    "button.title.hint": "Click to choose: {list}",
+  },
+};
+const localeService = {
+  register() {
+    return () => {};
+  },
+  bind() {
+    return (key, params) => {
+      let s = localeDicts[activeLocale]?.[key] ?? localeDicts.zh[key] ?? key;
+      if (params) s = s.replace(/\{(\w+)\}/g, (m, n) => (n in params ? String(params[n]) : m));
+      return s;
+    };
+  },
+  subscribe(fn) {
+    localeListeners.add(fn);
+    return () => localeListeners.delete(fn);
+  },
+  getLocale() {
+    return { active: activeLocale };
+  },
+  setLocale(id) {
+    activeLocale = id;
+    for (const fn of [...localeListeners]) fn();
   },
 };
 
@@ -160,6 +227,7 @@ function assert(cond, msg) {
 let dispose = null;
 const ctx = {
   layout: layoutService,
+  locale: localeService,
   effect(fn) {
     const d = fn();
     dispose = d;
@@ -167,7 +235,10 @@ const ctx = {
   },
 };
 mod.apply(ctx);
-assert(JSON.stringify(mod.inject) === JSON.stringify(["layout"]), "bundle injects the layout service");
+assert(
+  JSON.stringify(mod.inject) === JSON.stringify(["layout", "locale"]),
+  "bundle injects the layout + locale services",
+);
 
 const toggleCalls = () => log.filter((x) => x === "layout.toggleSidebar").length;
 const closeCalls = () => log.filter((x) => x === "layout.closeDetails").length;
@@ -183,6 +254,11 @@ setTimeout(() => {
   assert(!("dsh.wide" in storage), "old dsh.wide key migrated away");
   assert(toggleCalls() === 0, "wide tier does NOT touch the sidebar");
   assert(btn().classList.contains("active") === true, "button active");
+  assert(
+    menuItem("standard").querySelector(".dshwm-label").textContent === "标准",
+    "zh tier labels by default",
+  );
+  assert(btn().title.includes("点击选择"), "button title hint in zh");
 
   /* 2. menu: pick full → sidebar collapsed via layout service, width 100% */
   btn().click();
@@ -223,7 +299,25 @@ setTimeout(() => {
       assert(detailsClosed === false, "no self-heal while standard");
       assert(closeCalls() === closesBefore, "no closeDetails calls while standard");
 
-      /* 7. disposer cleans everything up */
+      /* 7. locale switch re-renders the picker copy (follows Settings → Language) */
+      localeService.setLocale("en");
+      assert(
+        menuItem("standard").querySelector(".dshwm-label").textContent === "Standard",
+        "menu label re-renders in English",
+      );
+      assert(
+        menuItem("full").querySelector(".dshwm-label").textContent === "Full",
+        "full label re-renders in English",
+      );
+      assert(btn().getAttribute("aria-label").includes("Chat width tier"), "button aria-label follows the locale");
+      assert(btn().title.includes("Click to choose"), "button title hint follows the locale");
+      localeService.setLocale("zh");
+      assert(
+        menuItem("standard").querySelector(".dshwm-label").textContent === "标准",
+        "back to Chinese re-renders",
+      );
+
+      /* 8. disposer cleans everything up */
       dispose();
       assert(!fakeBody.children.includes(btn()), "button removed on dispose");
       assert(!fakeBody.children.includes(menu()), "menu removed on dispose");

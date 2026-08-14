@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-08-14
+
+### Added
+
+- **i18n (zh / en)** — all picker copy (tier labels, button `aria-label` and
+  title) now follows the app's **Settings → Language** via the app's locale
+  service (`ctx.locale.register` / `bind` + change subscription). Switching
+  the language re-renders the button and menu immediately; the app's own
+  fallback (browser language → zh) applies.
+
+### Changed
+
+- `dsh.client.inject` now also requires `@deepseek-ai/dsh-client-locale`
+  alongside `@deepseek-ai/dsh-client-ui-layout`.
+
 ## [1.0.0] - 2026-08-14
 
 First public release — published to the npm registry as `dsh-width-tiers`.

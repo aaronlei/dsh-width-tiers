@@ -47,6 +47,11 @@ Restart `dsh web` (the plugin loads at boot) and hard-refresh the page
 (Ctrl+Shift+R). A round button with five bars appears at the bottom-right.
 
 > Installing from a local checkout: `dsh plugin --profile web add file:/path/to/dsh-width-tiers`.
+> Local-development gotcha: `file:` dependencies are **copied** into the
+> profile's `node_modules` (pnpm does not symlink them). After editing the
+> plugin source, re-sync the copy (e.g. `rsync -a --delete --exclude .git
+> /path/to/dsh-width-tiers/ ~/.dsh/profiles/web/node_modules/dsh-width-tiers/`)
+> or re-install after removing it, then restart `dsh web` and hard-refresh.
 
 ## Usage
 
@@ -56,6 +61,14 @@ Restart `dsh web` (the plugin loads at boot) and hard-refresh the page
   it, and it stays expanded.
 - Non-standard tiers also close the details panel (re-closed automatically if
   reopened); `standard` leaves everything to the app.
+
+## Language
+
+All picker copy (tier labels, button `aria-label` and title) follows the
+app's **Settings → Language** (中文 / English), through the app's own locale
+service. Switching the language re-renders the button and menu immediately;
+when no explicit language is chosen the app falls back to the browser's
+language, and Chinese is the last resort. No plugin-side setting needed.
 
 ## How it works
 
@@ -67,6 +80,9 @@ Restart `dsh web` (the plugin loads at boot) and hard-refresh the page
   simulating clicks.
 - The sidebar is only ever collapsed by the `full` tier; returning to
   `standard` restores it only if this plugin collapsed it.
+- Dictionaries are registered with the app's **locale service**
+  (`ctx.locale.register` / `bind`) and re-rendered through its change
+  subscription, so the copy always matches the app's active language.
 
 ## Limitations
 

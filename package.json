@@ -1,7 +1,7 @@
 {
   "name": "dsh-width-tiers",
-  "version": "1.0.0",
-  "description": "DSH Web client plugin: chat content width tiers (standard / medium / wide / ultra / full) with a floating picker button. Frees wide tables from the app's hard-coded 748px content cap.",
+  "version": "1.0.1",
+  "description": "DSH Web client plugin: chat content width tiers (standard / medium / wide / ultra / full) with a floating picker button. Frees wide tables from the app's hard-coded 748px content cap. UI copy follows the app language (zh / en).",
   "license": "MIT",
   "author": "aaronlei",
   "publishConfig": {
@@ -24,7 +24,8 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-ui-layout"
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-locale"
       ]
     }
   },

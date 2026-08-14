@@ -43,6 +43,11 @@ dsh plugin --profile web add dsh-width-tiers
 右下角会出现五条横条的圆形按钮。
 
 > 本地目录安装：`dsh plugin --profile web add file:/path/to/dsh-width-tiers`。
+> 本地开发注意：`file:` 依赖会被 **拷贝** 进 profile 的 node_modules（pnpm
+> 不会建软链）。改完插件源码后，需要重新同步拷贝（例如 `rsync -a --delete
+> --exclude .git /path/to/dsh-width-tiers/
+> ~/.dsh/profiles/web/node_modules/dsh-width-tiers/`）或先 remove 再 add，
+> 然后重启 `dsh web` 并硬刷新。
 
 ## 使用
 
@@ -51,6 +56,13 @@ dsh plugin --profile web add dsh-width-tiers
   随时点轨道图标展开，展开后保持展开。
 - 非标准档会关闭详情面板（被重新打开会自动再关）；标准档完全交给应用。
 
+## 多语言
+
+选择器里的所有文案（档位名、按钮的 `aria-label` 和标题）跟随应用的
+**设置 → 语言**（中文 / English），通过应用自身的 locale 服务实现。切换
+语言后按钮和菜单会立即重渲染；未显式选择语言时，应用会回退到浏览器语言，
+最后兜底中文。无需插件侧单独设置。
+
 ## 原理
 
 - 运行时**自动定位**定义 `--dsh-chat-content-width` 的元素（第一个计算值
@@ -58,6 +70,8 @@ dsh plugin --profile web add dsh-width-tiers
 - 面板操作走 **layout 服务**（`ctx.layout`），从不模拟点击。
 - 侧边栏只被「全宽」档收起；回到「标准」时，只有本插件自己收起的侧边栏
   才会被恢复展开（你手动收的不动）。
+- 字典注册到应用的 **locale 服务**（`ctx.locale.register` / `bind`），并
+  订阅其变更事件重渲染，文案始终与应用的当前语言一致。
 
 ## 已知限制
 
