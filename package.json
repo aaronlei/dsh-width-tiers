@@ -4,6 +4,9 @@
   "description": "DSH Web client plugin: chat content width tiers (standard / medium / wide / ultra / full) with a floating picker button. Frees wide tables from the app's hard-coded 748px content cap.",
   "license": "MIT",
   "author": "aaronlei",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "main": "lib/index.js",
   "exports": {
