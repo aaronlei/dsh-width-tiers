@@ -41,7 +41,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/aaronlei/dsh-width-tiers"
+    "url": "git+https://github.com/aaronlei/dsh-width-tiers.git"
   },
   "engines": {
     "node": ">=18"
