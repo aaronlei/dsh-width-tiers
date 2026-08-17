@@ -73,6 +73,11 @@ function makeEl(tag) {
     },
     addEventListener(ev, fn) { (this.handlers[ev] ||= []).push(fn); },
     appendChild(el2) { el2.parentNode = this; this.children.push(el2); return el2; },
+    removeChild(el2) {
+      const i = this.children.indexOf(el2);
+      if (i !== -1) this.children.splice(i, 1);
+      el2.parentNode = null;
+    },
     contains(el2) { return el2 === this || this.children.includes(el2); },
     querySelectorAll(sel) {
       const m = /^([a-z]+)\[([a-z-]+)\]$/.exec(sel);
@@ -94,9 +99,18 @@ function makeEl(tag) {
   return el;
 }
 
-/* the element that defines --dsh-chat-content-width (runtime detection target) */
+/* the element that defines --dsh-chat-content-width (runtime detection target).
+ * Nested under two shells so the path-walk re-location (the no-scan, no-flash
+ * path) can be exercised: the app remounts the chat tree on conversation
+ * switch by swapping the root at the same position. */
+const shellA = makeEl("div");
+const shellB = makeEl("div");
+shellA.appendChild(shellB);
 const fakeRoot = makeEl("div");
 fakeRoot.__vars = { "--dsh-chat-content-width": "748px" };
+shellB.appendChild(fakeRoot);
+fakeBody.appendChild(shellA);
+let currentRoots = [fakeRoot];
 
 /* fake layout service: the app's real panel actions */
 const layoutService = {
@@ -165,12 +179,31 @@ global.getComputedStyle = (el) => ({
   getPropertyValue: (n) => (el.__vars ? el.__vars[n] || "" : ""),
 });
 
+/* fake MutationObserver: tests fire the callback manually to simulate app DOM
+ * churn (conversation switch / details toggle) */
+let mutationCb = null;
+class MutationObserverStub {
+  constructor(cb) {
+    mutationCb = cb;
+  }
+  observe() {}
+  disconnect() {
+    mutationCb = null;
+  }
+}
+global.MutationObserver = MutationObserverStub;
+
+/* fake animation frames: heal runs on the next macrotask, well within the
+ * test waits */
+global.requestAnimationFrame = (cb) => setTimeout(() => cb(), 0);
+global.cancelAnimationFrame = (id) => clearTimeout(id);
+
 const docListeners = {};
 global.document = {
   body: fakeBody,
   head: { appendChild() {} },
   createElement: makeEl,
-  contains: () => true,
+  contains: (el) => currentRoots.includes(el),
   querySelector(sel) {
     if (sel === "[data-sidebar-collapsed]") return sidebarCollapsed ? frameEl : null;
     if (sel === "[data-details-collapsed]") return detailsClosed ? frameEl : null;
@@ -180,7 +213,7 @@ global.document = {
     return null;
   },
   querySelectorAll(sel) {
-    if (sel === "[class]") return [fakeRoot];
+    if (sel === "[class]") return currentRoots;
     return [];
   },
   addEventListener(ev, fn) { (docListeners[ev] ||= []).push(fn); },
@@ -284,47 +317,76 @@ setTimeout(() => {
   assert(fakeRoot.style["--dsh-chat-content-width"] === "1400px", "ultra sets 1400px");
   assert(toggleCalls() === 2, "ultra does NOT touch the sidebar");
 
-  /* 5. self-heal: details reopened while non-standard gets closed again */
+  /* 5. self-heal: details reopened while non-standard gets closed again.
+   * The heal is DOM-driven now — fire the mutation callback to simulate the
+   * app toggling the attribute. */
   detailsClosed = false; // user clicked a tool row
+  mutationCb && mutationCb();
   setTimeout(() => {
     assert(detailsClosed === true, "self-heal re-closes details while ultra");
     assert(closeCalls() >= 1, "layout.closeDetails used for the self-heal");
 
-    /* 6. no self-heal while standard */
-    btn().click();
-    menuItem("standard").click();
-    detailsClosed = false;
-    const closesBefore = closeCalls();
+    /* 5b. conversation switch remounts the chat tree: the width root is
+     * replaced at the same position by a fresh element declaring the app
+     * default. The mutation-driven heal must re-locate it (path walk, no
+     * full scan) and re-apply the current tier before the next paint
+     * (regression: previously only a full page refresh restored the width,
+     * and the old debounce flashed the default width for ~150 ms). */
+    const remounted = makeEl("div");
+    remounted.__vars = { "--dsh-chat-content-width": "748px" };
+    shellB.removeChild(fakeRoot);
+    shellB.appendChild(remounted);
+    currentRoots = [remounted];
+    mutationCb && mutationCb();
+
+    /* 6. after the debounced heal, the tier is re-applied to the remounted root */
     setTimeout(() => {
-      assert(detailsClosed === false, "no self-heal while standard");
-      assert(closeCalls() === closesBefore, "no closeDetails calls while standard");
-
-      /* 7. locale switch re-renders the picker copy (follows Settings → Language) */
-      localeService.setLocale("en");
       assert(
-        menuItem("standard").querySelector(".dshwm-label").textContent === "Standard",
-        "menu label re-renders in English",
+        remounted.style["--dsh-chat-content-width"] === "1400px",
+        "width re-applied to the remounted root after conversation switch",
       );
       assert(
-        menuItem("full").querySelector(".dshwm-label").textContent === "Full",
-        "full label re-renders in English",
-      );
-      assert(btn().getAttribute("aria-label").includes("Chat width tier"), "button aria-label follows the locale");
-      assert(btn().title.includes("Click to choose"), "button title hint follows the locale");
-      localeService.setLocale("zh");
-      assert(
-        menuItem("standard").querySelector(".dshwm-label").textContent === "标准",
-        "back to Chinese re-renders",
+        fakeBody.getAttribute("data-dsh-width") === "ultra",
+        "tier survives the conversation switch",
       );
 
-      /* 8. disposer cleans everything up */
-      dispose();
-      assert(!fakeBody.children.includes(btn()), "button removed on dispose");
-      assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
-      assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
-      assert(!("--dsh-chat-content-width" in fakeRoot.style), "width override removed");
-      console.log("\nAll assertions passed.");
-      process.exit(0);
-    }, 1500);
-  }, 1500);
+      /* 7. no self-heal while standard */
+      btn().click();
+      menuItem("standard").click();
+      detailsClosed = false;
+      const closesBefore = closeCalls();
+      setTimeout(() => {
+        assert(detailsClosed === false, "no self-heal while standard");
+        assert(closeCalls() === closesBefore, "no closeDetails calls while standard");
+
+        /* 8. locale switch re-renders the picker copy (follows Settings → Language) */
+        localeService.setLocale("en");
+        assert(
+          menuItem("standard").querySelector(".dshwm-label").textContent === "Standard",
+          "menu label re-renders in English",
+        );
+        assert(
+          menuItem("full").querySelector(".dshwm-label").textContent === "Full",
+          "full label re-renders in English",
+        );
+        assert(btn().getAttribute("aria-label").includes("Chat width tier"), "button aria-label follows the locale");
+        assert(btn().title.includes("Click to choose"), "button title hint follows the locale");
+        localeService.setLocale("zh");
+        assert(
+          menuItem("standard").querySelector(".dshwm-label").textContent === "标准",
+          "back to Chinese re-renders",
+        );
+
+        /* 9. disposer cleans everything up */
+        dispose();
+        assert(mutationCb === null, "mutation observer disconnected on dispose");
+        assert(!fakeBody.children.includes(btn()), "button removed on dispose");
+        assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
+        assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
+        assert(!("--dsh-chat-content-width" in remounted.style), "width override removed");
+        console.log("\nAll assertions passed.");
+        process.exit(0);
+      }, 400);
+    }, 400);
+  }, 400);
 }, 500);

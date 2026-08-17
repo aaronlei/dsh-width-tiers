@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-08-18
+
+### Fixed
+
+- **Width tier no longer lost on conversation switch** — the tier now
+  re-applies automatically when the chat tree remounts; previously it fell
+  back to the default width until the page was refreshed.
+
+### Changed
+
+- **Smoother conversation switches** — the target width is applied as the
+  new view appears, without a visible flash of the default width; self-heal
+  no longer polls, so remounts do not cause jank.
+
 ## [1.0.1] - 2026-08-14
 
 ### Added
