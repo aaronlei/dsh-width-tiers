@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-08-23
+
+### Changed
+
+- **Floating picker no longer floats over content** — it now **collapses to a
+  slim blue vertical bar docked at the window's right edge** (10px from the
+  border) and expands back to the full round button on hover / keyboard focus,
+  so it no longer blocks the message area or the send button.
+- **Collapsed bar shows the current tier** — the bar holds equal-length white
+  bars whose lit ones mirror the active tier (same as the round button's
+  varying-length bars).
+- **Stable hover, no flicker** — a fixed transparent 36×36 hit area carries
+  the hover state, so the shape no longer flips between bar and circle at the
+  bottom-right corner.
+
+### Fixed
+
+- **Button no longer covers the message send button** — it is raised above the
+  composer so the two never overlap.
+
 ## [1.0.2] - 2026-08-18
 
 ### Fixed
