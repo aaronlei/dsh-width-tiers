@@ -1,6 +1,6 @@
 {
   "name": "dsh-width-tiers",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "DSH Web client plugin: chat content width tiers (standard / medium / wide / ultra / full) with a floating picker button. Frees wide tables from the app's hard-coded 748px content cap. UI copy follows the app language (zh / en).",
   "license": "MIT",
   "author": "aaronlei",
@@ -16,11 +16,15 @@
   },
   "files": [
     "lib",
+    "cordis.patch.yml",
     "LICENSE",
     "README.md",
     "README.zh.md"
   ],
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [

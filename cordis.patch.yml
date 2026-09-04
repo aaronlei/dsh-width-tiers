@@ -1,0 +1,9 @@
+# dsh-width-tiers bundle patch — automatically applied when this package is
+# added as a profile bundle (e.g. `dsh plugin add dsh-width-tiers`).
+#
+# It registers this plugin's own loader entry (a web client plugin carried by
+# its node-half row). Because bundle patches apply after the shipped base
+# layers, no manual `cordis.patch.yml` edit is needed in the profile.
+- insert:
+    - id: dsh-width-tiers
+      name: 'dsh-width-tiers'

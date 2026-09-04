@@ -31,13 +31,8 @@ DSH Web 在会话根元素上硬编码了一个阅读宽度
 dsh plugin --profile web add dsh-width-tiers
 ```
 
-然后在 `~/.dsh/profiles/web/cordis.patch.yml` 里注册为加载项：
-
-```yaml
-- insert:
-    - id: dsh-width-tiers
-      name: dsh-width-tiers
-```
+bundle patch 会自动插入 `dsh-width-tiers` 加载项——无需手动改
+`cordis.patch.yml`。
 
 **重启 `dsh web`**（插件在启动时加载），再硬刷新页面（Ctrl+Shift+R）。
 右下角会出现五条横条的圆形按钮。
@@ -85,7 +80,6 @@ dsh plugin --profile web add dsh-width-tiers
 dsh plugin --profile web remove dsh-width-tiers
 ```
 
-删除 `~/.dsh/profiles/web/cordis.patch.yml` 里的 `dsh-width-tiers` 行，
 然后重启 `dsh web`。
 
 ## 许可证

@@ -34,14 +34,8 @@ a glance.
 dsh plugin --profile web add dsh-width-tiers
 ```
 
-Then register it as a loader entry in
-`~/.dsh/profiles/web/cordis.patch.yml`:
-
-```yaml
-- insert:
-    - id: dsh-width-tiers
-      name: dsh-width-tiers
-```
+The bundle patch then inserts the `dsh-width-tiers` loader entry itself — no
+manual `cordis.patch.yml` edits needed.
 
 Restart `dsh web` (the plugin loads at boot) and hard-refresh the page
 (Ctrl+Shift+R). A round button with five bars appears at the bottom-right.
@@ -98,7 +92,6 @@ language, and Chinese is the last resort. No plugin-side setting needed.
 dsh plugin --profile web remove dsh-width-tiers
 ```
 
-Remove the `dsh-width-tiers` row from `~/.dsh/profiles/web/cordis.patch.yml`,
 then restart `dsh web`.
 
 ## License
