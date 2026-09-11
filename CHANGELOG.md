@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-09-11
+
+### Fixed
+
+- **Picker button missing on DSH 0.1.5-rc.2** — after upgrading DSH, the
+  floating width picker no longer appeared at the bottom-right corner. The
+  0.1.5-rc.2 layout overhaul replaced the details panel with the rightbar:
+  `data-details-collapsed` was removed entirely, and `data-sidebar-collapsed`
+  became conditionally rendered (`sidebarCollapsed || void 0`), so with the
+  sidebar expanded the button's mount gate never matched and the button was
+  never attached.
+
+### Changed
+
+- **Mount gate no longer depends on collapsed markers** — the button now
+  waits for the AppFrame overlay layer (`[data-shell-overlay]`), which is
+  rendered unconditionally once the shell exists, instead of the removed
+  `data-details-collapsed` / conditional `data-sidebar-collapsed` attributes.
+- **Right panel handling via the new layout API** — non-standard tiers now
+  close the right panel through `layout.closeRightbar()` (idempotent), since
+  `layout.closeDetails` no longer exists; the MutationObserver attribute
+  filter was updated to the new `data-rightbar-collapsed` marker.
+
 ## [1.0.4] - 2026-09-04
 
 ### Changed
