@@ -4,29 +4,38 @@
 
 A client plugin for the **DeepSeek Harness Web GUI** that adds **chat content
 width tiers** with a floating picker button (bottom-right, above the
-composer): 标准 / 中等 / 宽 / 超宽 / 全宽 (standard / medium / wide / ultra /
-full).
+composer): 标准 / 中等 / 宽 / 超宽 / 全宽 / 自定义 (standard / medium / wide /
+ultra / full / custom).
 
 ## Why
 
-The DSH Web app hard-codes a readable content width on the conversation root
-(`--dsh-chat-content-width: 748px`). That caps the message column — and every
-table inside it — at **748px** no matter how wide your window or panels are,
-so wide tables always need horizontal scrolling.
+The DSH Web app caps the message column — and every table inside it — at
+`--dsh-chat-content-width` (0.1.7 default `clamp(680px, column × 0.64,
+920px)`), no matter how wide your window is, so wide tables always need
+horizontal scrolling.
 
-This plugin overrides that variable per tier:
+This plugin sets the width per tier through 0.1.7's **native width axis**
+(`--dsh-chat-user-width` + the app's `dsh.conversation.contentWidth`
+preference), letting the app clamp every value to "column − 176px handle
+budget" — so the built-in drag handles keep working:
 
 | Tier | Content width | Sidebar |
 |---|---|---|
-| standard 标准 | 748px (app default) | untouched |
+| standard 标准 | app default | untouched |
 | medium 中等 | 960px | untouched |
 | wide 宽 | 1280px | untouched |
 | ultra 超宽 | 1400px | untouched |
-| full 全宽 | 100% (fills the window) | collapsed to the icon rail |
+| full 全宽 | column minus the handle budget (fills the available width) | collapsed to the icon rail |
+| custom 自定义 | your dragged width, re-selectable from the menu | untouched |
+
+On narrow windows wider tiers are clamped to the available column, so nothing
+overflows under the sidebar.
 
 The choice persists in `localStorage` and is restored on the next visit; the
 menu highlights the current tier, and the button's five level-bars show it at
-a glance.
+a glance (all lit for custom). Dragging one of 0.1.7's native edge handles
+switches the picker to the custom tier — the plugin stands aside for native
+drags.
 
 ## Install
 

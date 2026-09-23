@@ -39,6 +39,8 @@ const fakeBody = {
 
 class HTMLElement {}
 global.HTMLElement = HTMLElement;
+/* pointer events check `e.target instanceof Element` */
+global.Element = HTMLElement;
 
 function makeEl(tag) {
   const el = {
@@ -47,9 +49,16 @@ function makeEl(tag) {
     children: [],
     handlers: {},
     dataset: {},
+    /* 0.1.7 width axis: tierPx clamps through the column width */
+    offsetWidth: 2000,
     style: {
       setProperty(n, v) { this[n] = String(v); },
       removeProperty(n) { delete this[n]; },
+      getPropertyValue(n) { return this[n] == null ? "" : String(this[n]); },
+    },
+    closest(sel) {
+      if (sel === "[data-width-handle]") return this.attrs.has("data-width-handle") ? this : null;
+      return null;
     },
     classList: {
       set: new Set(),
@@ -72,11 +81,12 @@ function makeEl(tag) {
       }
     },
     addEventListener(ev, fn) { (this.handlers[ev] ||= []).push(fn); },
-    appendChild(el2) { el2.parentNode = this; this.children.push(el2); return el2; },
+    appendChild(el2) { el2.parentNode = this; el2.parentElement = this; this.children.push(el2); return el2; },
     removeChild(el2) {
       const i = this.children.indexOf(el2);
       if (i !== -1) this.children.splice(i, 1);
       el2.parentNode = null;
+      el2.parentElement = null;
     },
     contains(el2) { return el2 === this || this.children.includes(el2); },
     querySelectorAll(sel) {
@@ -118,6 +128,10 @@ const layoutService = {
     log.push("layout.toggleSidebar");
     sidebarCollapsed = !sidebarCollapsed;
   },
+  closeRightbar() {
+    log.push("layout.closeRightbar");
+    detailsClosed = true;
+  },
   closeDetails() {
     log.push("layout.closeDetails");
     detailsClosed = true;
@@ -136,6 +150,7 @@ const localeDicts = {
     "tier.wide": "宽",
     "tier.ultra": "超宽",
     "tier.full": "全宽",
+    "tier.custom": "自定义",
     "button.aria": "对话区宽度档位：{label}（{value}），点击选择档位",
     "button.title.summary": "对话区宽度档位：{label}（{value}）",
     "button.title.hint": "点击选择：{list}",
@@ -146,6 +161,7 @@ const localeDicts = {
     "tier.wide": "Wide",
     "tier.ultra": "Ultra",
     "tier.full": "Full",
+    "tier.custom": "Custom",
     "button.aria": "Chat width tier: {label} ({value}). Click to choose a tier.",
     "button.title.summary": "Chat width tier: {label} ({value})",
     "button.title.hint": "Click to choose: {list}",
@@ -205,6 +221,7 @@ global.document = {
   createElement: makeEl,
   contains: (el) => currentRoots.includes(el),
   querySelector(sel) {
+    if (sel === "[data-shell-overlay]") return frameEl; // mount gate
     if (sel === "[data-sidebar-collapsed]") return sidebarCollapsed ? frameEl : null;
     if (sel === "[data-details-collapsed]") return detailsClosed ? frameEl : null;
     if (sel === "[data-sidebar-collapsed], [data-details-collapsed]") {
@@ -274,16 +291,23 @@ assert(
 );
 
 const toggleCalls = () => log.filter((x) => x === "layout.toggleSidebar").length;
-const closeCalls = () => log.filter((x) => x === "layout.closeDetails").length;
+const closeCalls = () =>
+  log.filter((x) => x === "layout.closeDetails" || x === "layout.closeRightbar").length;
 const btn = () => fakeBody.children.find((c) => c.id === "dsh-wide-toggle");
 const menu = () => fakeBody.children.find((c) => c.id === "dsh-width-menu");
 const menuItem = (tier) => menu().children.find((b) => b.getAttribute("data-tier") === tier);
+
+/* the width axis the 0.1.7 app publishes on: the PARENT of the element that
+ * declares --dsh-chat-content-width (ConversationWidthControls contract) */
+const widthTargetEl = () => shellB;
+const userWidth = () => shellB.style["--dsh-chat-user-width"];
 
 /* 1. saved tier restored once the app shell mounts (details closed by default) */
 setTimeout(() => {
   assert(!!btn() && !!menu(), "button and menu appended after mount");
   assert(fakeBody.getAttribute("data-dsh-width") === "wide", "saved tier restored");
-  assert(fakeRoot.style["--dsh-chat-content-width"] === "1280px", "content width overridden on detected root");
+  assert(userWidth() === "1280px", "user-width set on the app's publish target");
+  assert(storage["dsh.conversation.contentWidth"] === "1280", "app preference mirrored");
   assert(!("dsh.wide" in storage), "old dsh.wide key migrated away");
   assert(toggleCalls() === 0, "wide tier does NOT touch the sidebar");
   assert(btn().classList.contains("active") === true, "button active");
@@ -293,14 +317,14 @@ setTimeout(() => {
   );
   assert(btn().title.includes("点击选择"), "button title hint in zh");
 
-  /* 2. menu: pick full → sidebar collapsed via layout service, width 100% */
+  /* 2. menu: pick full → sidebar collapsed via layout service, column max */
   btn().click();
   assert(menu().hidden === false, "menu opens");
   menuItem("full").click();
   assert(fakeBody.getAttribute("data-dsh-width") === "full", "full selected");
   assert(sidebarCollapsed === true, "full collapses the sidebar");
   assert(toggleCalls() === 1, "layout.toggleSidebar called once");
-  assert(fakeRoot.style["--dsh-chat-content-width"] === "100%", "full sets 100%");
+  assert(userWidth() === "1824px", "full sets column minus the handle budget");
   assert(storage["dsh.widthTier"] === "full", "tier persisted");
 
   /* 3. standard restores the sidebar (we collapsed it) + removes override */
@@ -308,23 +332,52 @@ setTimeout(() => {
   menuItem("standard").click();
   assert(sidebarCollapsed === false, "standard restores the sidebar");
   assert(toggleCalls() === 2, "toggleSidebar called again");
-  assert(!("--dsh-chat-content-width" in fakeRoot.style), "standard removes the width override");
+  assert(userWidth() === undefined, "standard removes the width override");
+  assert(!("dsh.conversation.contentWidth" in storage), "standard clears the app preference");
   assert(btn().classList.contains("active") === false, "button inactive");
 
   /* 4. ultra (1400px) never touches the sidebar */
   btn().click();
   menuItem("ultra").click();
-  assert(fakeRoot.style["--dsh-chat-content-width"] === "1400px", "ultra sets 1400px");
+  assert(userWidth() === "1400px", "ultra sets 1400px");
   assert(toggleCalls() === 2, "ultra does NOT touch the sidebar");
 
-  /* 5. self-heal: details reopened while non-standard gets closed again.
-   * The heal is DOM-driven now — fire the mutation callback to simulate the
-   * app toggling the attribute. */
-  detailsClosed = false; // user clicked a tool row
+  /* 4b. dragging a native handle hands the width over to the app: the plugin
+   * flips to the custom tier on pointerdown, records the settled width on
+   * pointerup, and the dragged width becomes re-selectable from the menu. */
+  const handle = makeEl("div");
+  handle.setAttribute("data-width-handle", "");
+  const firePointer = (ev) => (docListeners[ev] || []).forEach((fn) => fn({ target: handle }));
+  firePointer("pointerdown");
+  assert(fakeBody.getAttribute("data-dsh-width") === "custom", "drag switches to the custom tier");
+  assert(storage["dsh.widthTier"] === "custom", "custom tier persisted");
+  assert(menuItem("custom").classList.contains("selected") === true, "custom selected in the menu");
+  shellB.style.setProperty("--dsh-chat-user-width", "1100px"); // the app's drag writes
+  firePointer("pointerup");
+  assert(storage["dsh.widthTierCustom"] === "1100", "dragged width recorded");
+  assert(
+    menuItem("custom").querySelector(".dshwm-value").textContent === "1100px",
+    "custom menu item shows the dragged width",
+  );
+
+  /* 4c. custom is re-selectable: wide then back to the dragged width */
+  btn().click();
+  menuItem("wide").click();
+  assert(userWidth() === "1280px", "wide re-applies after a drag");
+  btn().click();
+  menuItem("custom").click();
+  assert(userWidth() === "1100px", "custom re-applies the dragged width");
+  const closesBeforeSnapshot = closeCalls();
+
+  /* 5. the rightbar is NEVER touched: reopening it while a non-standard tier
+   * is active must survive the self-heal (regression: 1.0.x called
+   * layout.closeRightbar on every heal, which retracted the grid track while
+   * the seat stayed expanded — the panel then overlaid the conversation). */
+  detailsClosed = false; // user expanded the rightbar
   mutationCb && mutationCb();
   setTimeout(() => {
-    assert(detailsClosed === true, "self-heal re-closes details while ultra");
-    assert(closeCalls() >= 1, "layout.closeDetails used for the self-heal");
+    assert(detailsClosed === false, "self-heal does NOT close the rightbar");
+    assert(closeCalls() === closesBeforeSnapshot, "no closeRightbar calls during heal");
 
     /* 5b. conversation switch remounts the chat tree: the width root is
      * replaced at the same position by a fresh element declaring the app
@@ -342,11 +395,11 @@ setTimeout(() => {
     /* 6. after the debounced heal, the tier is re-applied to the remounted root */
     setTimeout(() => {
       assert(
-        remounted.style["--dsh-chat-content-width"] === "1400px",
+        userWidth() === "1100px",
         "width re-applied to the remounted root after conversation switch",
       );
       assert(
-        fakeBody.getAttribute("data-dsh-width") === "ultra",
+        fakeBody.getAttribute("data-dsh-width") === "custom",
         "tier survives the conversation switch",
       );
 
@@ -383,7 +436,7 @@ setTimeout(() => {
         assert(!fakeBody.children.includes(btn()), "button removed on dispose");
         assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
         assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
-        assert(!("--dsh-chat-content-width" in remounted.style), "width override removed");
+        assert(userWidth() === undefined, "width override removed on dispose");
         console.log("\nAll assertions passed.");
         process.exit(0);
       }, 400);

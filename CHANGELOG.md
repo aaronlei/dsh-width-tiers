@@ -5,6 +5,51 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-09-23
+
+### Fixed
+
+- **Native drag handles muted on DSH 0.1.7-alpha.1** — 0.1.7 added transcript
+  width drag handles (`ConversationWidthControls`) that publish
+  `--dsh-chat-user-width` on the conversation body's parent, while
+  `--dsh-chat-content-width` now resolves from it. The 1.0.5 inline
+  `!important` override of `--dsh-chat-content-width` sat on top of that axis,
+  so dragging a handle no longer changed anything (and the handle hit zones
+  collapsed to zero width on wide tiers).
+- **Sidebar covered the transcript** — the same forced override let the
+  transcript overflow its center column, and the neighboring sidebar /
+  rightbar grid columns painted over the overflow ("对话窗口被边侧栏覆盖").
+- **Rightbar covered the conversation（对话窗口被边侧栏覆盖）** — the 1.0.x
+  self-heal called `layout.closeRightbar()` on every heal while a
+  non-standard tier was active. On 0.1.7 the rightbar panel lives in its own
+  seat: `closeRightbar()` only retracts the grid **track** while the seat
+  stays expanded, so the panel kept rendering as an overlay pinned to the
+  frame's right edge — hanging over and covering the conversation. The
+  plugin no longer touches the rightbar at all; the app's width axis yields
+  space to the panel on its own. Verified end-to-end against a live
+  0.1.7-alpha.1 instance (rightbar track persists, transcript re-clamps and
+  stays clear of the panel).
+
+### Changed
+
+- **Drives the app's native width axis** — tiers now write
+  `--dsh-chat-user-width` (no `!important`) on the same element the app
+  publishes to, and mirror the value into the app's own
+  `dsh.conversation.contentWidth` preference, so window resizes and
+  conversation remounts re-clamp through the app's `resolveContentWidth`
+  (max = column − 176px handle budget). No value can overflow the column
+  anymore.
+- **New `custom` tier** — pressing a native drag handle flips the picker to
+  自定义 / Custom (all level bars lit); the settled width is recorded and
+  stays re-selectable from the menu (e.g. 宽 1280px ↔ custom 1100px). The
+  custom menu item is disabled until the first drag.
+- **`full` follows the live column** — instead of a literal `100%`, full now
+  equals the column minus the handle budget and re-resolves after the sidebar
+  collapse animation settles, so it always fills the widened column.
+- `standard` clears the app width preference (back to the app default
+  `clamp(680px, column × 0.64, 920px)` — the 0.1.7 default, not the old
+  748px).
+
 ## [1.0.5] - 2026-09-11
 
 ### Fixed
