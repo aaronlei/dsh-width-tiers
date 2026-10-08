@@ -451,6 +451,10 @@ setTimeout(() => {
           menuItem("full").querySelector(".dshwm-value").textContent === "1824px",
           "full shows the live column width, not 100%",
         );
+        assert(
+          menuItem("medium").querySelector(".dshwm-value").textContent === "1120px",
+          "medium resolves to the widened 1120px shelf",
+        );
 
         /* 8c. a window resize (narrower column) re-renders the resolved values,
          * so the copy never claims a width the app would clamp away. */

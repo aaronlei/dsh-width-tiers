@@ -22,7 +22,7 @@ budget" — so the built-in drag handles keep working:
 | Tier | Content width | Sidebar |
 |---|---|---|
 | standard 标准 | app default | untouched |
-| medium 中等 | 960px | untouched |
+| medium 中等 | 1120px | untouched |
 | wide 宽 | 1280px | untouched |
 | ultra 超宽 | 1400px | untouched |
 | full 全宽 | column minus the handle budget (fills the available width) | collapsed to the icon rail |

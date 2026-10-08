@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`medium` raised 960px → 1120px** — the app's `standard` default caps at
+  920px, so 960px was only 40px away and read as the same width on wide
+  windows. The shelf is now 920 → 1120 → 1280 → 1400 → `full`, and narrow
+  windows still clamp through the same `column − 176px` cap (the menu shows
+  the clamped value).
 - **DSH 0.2.0-rc.2 verified compatible** — the width axis
   (`ConversationWidthControls`, `--dsh-chat-user-width`,
   `dsh.conversation.contentWidth`), the mount gate (`[data-shell-overlay]`),
