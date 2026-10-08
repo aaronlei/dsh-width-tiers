@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-10-08
+
+### Fixed
+
+- **Menu and title advertised widths the app no longer applies** — `standard`
+  still read `748px` and `full` read `100%`, both hard-coded leftovers from
+  before 1.0.6 (standard now resolves through the app's own
+  `clamp(680px, column × 0.64, 920px)`, full through `column − 176px`). Every
+  tier now shows the px it resolves to at the **live column**, so a clamped
+  tier reads its real value on narrow windows (e.g. `宽 668px` instead of
+  `1280px`). The copy is refreshed when the menu opens and, within a frame,
+  after a window resize.
+
+### Changed
+
+- **DSH 0.2.0-rc.2 verified compatible** — the width axis
+  (`ConversationWidthControls`, `--dsh-chat-user-width`,
+  `dsh.conversation.contentWidth`), the mount gate (`[data-shell-overlay]`),
+  `[data-sidebar-collapsed]`, the layout/locale services, the client module
+  loader and the `dsh.bundle.patch` flow are unchanged from 0.1.7; 0.2.0's new
+  `dsh.client.external` / `immediately` fields are optional. Checked by
+  contract diff plus an end-to-end run against a live 0.2.0-rc.2 instance
+  (all six tiers, sidebar collapse/restore, resize clamping, no console
+  errors). 0.2.0's removal of `data-shell-leading-band` /
+  `data-panel-conversation` does not affect this plugin.
+- README: the 1.0.6 removal of the right-panel handling is now reflected
+  (the old "non-standard tiers close the details panel" text was stale), and
+  the supported-version note covers 0.2.0.
+
 ## [1.0.6] - 2026-09-23
 
 ### Fixed

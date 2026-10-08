@@ -10,11 +10,11 @@ ultra / full / custom).
 ## Why
 
 The DSH Web app caps the message column — and every table inside it — at
-`--dsh-chat-content-width` (0.1.7 default `clamp(680px, column × 0.64,
+`--dsh-chat-content-width` (0.1.7–0.2.0 default `clamp(680px, column × 0.64,
 920px)`), no matter how wide your window is, so wide tables always need
 horizontal scrolling.
 
-This plugin sets the width per tier through 0.1.7's **native width axis**
+This plugin sets the width per tier through the app's **native width axis**
 (`--dsh-chat-user-width` + the app's `dsh.conversation.contentWidth`
 preference), letting the app clamp every value to "column − 176px handle
 budget" — so the built-in drag handles keep working:
@@ -28,12 +28,16 @@ budget" — so the built-in drag handles keep working:
 | full 全宽 | column minus the handle budget (fills the available width) | collapsed to the icon rail |
 | custom 自定义 | your dragged width, re-selectable from the menu | untouched |
 
+The menu and the button title always show the width a tier resolves to **at
+the current column**, so on narrow windows a clamped tier reads its real
+value (e.g. `宽 668px`) instead of its nominal one.
+
 On narrow windows wider tiers are clamped to the available column, so nothing
 overflows under the sidebar.
 
 The choice persists in `localStorage` and is restored on the next visit; the
 menu highlights the current tier, and the button's five level-bars show it at
-a glance (all lit for custom). Dragging one of 0.1.7's native edge handles
+a glance (all lit for custom). Dragging one of the app's native edge handles
 switches the picker to the custom tier — the plugin stands aside for native
 drags.
 
@@ -62,8 +66,9 @@ Restart `dsh web` (the plugin loads at boot) and hard-refresh the page
 - `full` collapses the sidebar to the icon rail through the app's own toggle
   — it is never force-hidden or locked: click a rail icon any time to expand
   it, and it stays expanded.
-- Non-standard tiers also close the details panel (re-closed automatically if
-  reopened); `standard` leaves everything to the app.
+- The right panel (rightbar) is never touched: its track and panel are fully
+  owned by the app, and the conversation yields space to it on its own.
+  `standard` leaves the layout entirely to the app.
 
 ## Language
 
@@ -90,10 +95,10 @@ language, and Chinese is the last resort. No plugin-side setting needed.
 ## Limitations
 
 - Content width cannot exceed the window: on a narrow window, wider tiers are
-  capped by the available column. Use `full` (which also collapses the
-  sidebar) for the maximum.
+  capped by the available column (the menu shows the capped value). Use
+  `full` (which also collapses the sidebar) for the maximum.
 - Requires the DSH Web client plugin system (dsh ≥ 0.1.0-rc.x with a `web`
-  profile).
+  profile). Verified on dsh 0.1.7-alpha.1 and 0.2.0-rc.2.
 
 ## Uninstall
 
