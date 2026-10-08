@@ -243,8 +243,18 @@ global.document = {
   },
 };
 
+const winListeners = {};
 global.window = {
-  addEventListener() {},
+  addEventListener(ev, fn) {
+    (winListeners[ev] ||= []).push(fn);
+  },
+  removeEventListener(ev, fn) {
+    const l = winListeners[ev];
+    if (l) {
+      const i = l.indexOf(fn);
+      if (i !== -1) l.splice(i, 1);
+    }
+  },
   setTimeout: global.setTimeout,
   clearTimeout: global.clearTimeout,
   localStorage: {
@@ -430,15 +440,43 @@ setTimeout(() => {
           "back to Chinese re-renders",
         );
 
-        /* 9. disposer cleans everything up */
-        dispose();
-        assert(mutationCb === null, "mutation observer disconnected on dispose");
-        assert(!fakeBody.children.includes(btn()), "button removed on dispose");
-        assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
-        assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
-        assert(userWidth() === undefined, "width override removed on dispose");
-        console.log("\nAll assertions passed.");
-        process.exit(0);
+        /* 8b. the displayed value is the px the app actually applies (v1.0.7):
+         * `standard` follows the app's own default formula and `full` the live
+         * column, instead of the old hard-coded 748px / 100%. */
+        assert(
+          menuItem("standard").querySelector(".dshwm-value").textContent === "920px",
+          "standard shows the resolved app default, not 748px",
+        );
+        assert(
+          menuItem("full").querySelector(".dshwm-value").textContent === "1824px",
+          "full shows the live column width, not 100%",
+        );
+
+        /* 8c. a window resize (narrower column) re-renders the resolved values,
+         * so the copy never claims a width the app would clamp away. */
+        remounted.offsetWidth = 1000;
+        (winListeners.resize || []).forEach((fn) => fn());
+        setTimeout(() => {
+          assert(
+            menuItem("standard").querySelector(".dshwm-value").textContent === "680px",
+            "resize re-renders standard through the app default",
+          );
+          assert(
+            menuItem("wide").querySelector(".dshwm-value").textContent === "824px",
+            "resize re-renders the clamped tier value",
+          );
+
+          /* 9. disposer cleans everything up */
+          dispose();
+          assert(mutationCb === null, "mutation observer disconnected on dispose");
+          assert(!fakeBody.children.includes(btn()), "button removed on dispose");
+          assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
+          assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
+          assert(userWidth() === undefined, "width override removed on dispose");
+          assert((winListeners.resize || []).length === 0, "resize listener removed on dispose");
+          console.log("\nAll assertions passed.");
+          process.exit(0);
+        }, 50);
       }, 400);
     }, 400);
   }, 400);
