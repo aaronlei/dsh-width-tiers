@@ -28,9 +28,13 @@ budget" — so the built-in drag handles keep working:
 | full 全宽 | column minus the handle budget (fills the available width) | collapsed to the icon rail |
 | custom 自定义 | your dragged width, re-selectable from the menu | untouched |
 
-The menu and the button title always show the width a tier resolves to **at
-the current column**, so on narrow windows a clamped tier reads its real
-value (e.g. `宽 668px`) instead of its nominal one.
+The menu and the button title show nominal px for the fixed tiers (medium
+1120px, wide 1280px, ultra 1400px). Standard shows the app default px it
+resolves right now (`clamp(680px, column × 0.64, 920px)`, e.g. 710px); full
+shows the live maximum (`column − 176px`, e.g. 934px); custom shows its
+recorded width or "Not set". The app still clamps the applied width to
+"column − 176px"; on a narrow window a higher tier therefore behaves like
+"full".
 
 On narrow windows wider tiers are clamped to the available column, so nothing
 overflows under the sidebar.
@@ -40,6 +44,12 @@ menu highlights the current tier, and the button's five level-bars show it at
 a glance (all lit for custom). Dragging one of the app's native edge handles
 switches the picker to the custom tier — the plugin stands aside for native
 drags.
+
+Before the first drag, picking custom does not silently keep a width: a guide
+appears at the conversation's right edge and highlights the width handle.
+While dragging, a bubble shows the live transcript width; releasing records it
+as the custom value. Every later handle drag opens the same highlight + live
+readout, no matter which tier was active.
 
 ## Install
 
@@ -95,10 +105,12 @@ language, and Chinese is the last resort. No plugin-side setting needed.
 ## Limitations
 
 - Content width cannot exceed the window: on a narrow window, wider tiers are
-  capped by the available column (the menu shows the capped value). Use
-  `full` (which also collapses the sidebar) for the maximum.
+  capped by the available column (the picker keeps showing the nominal value;
+  the live bubble during a drag shows the applied width). Use `full` (which
+  also collapses the sidebar) for the maximum.
 - Requires the DSH Web client plugin system (dsh ≥ 0.1.0-rc.x with a `web`
-  profile). Verified on dsh 0.1.7-alpha.1 and 0.2.0-rc.2.
+  profile). Verified on dsh 0.1.7-alpha.1 and 0.2.0-rc.2; the 0.2.1-rc.1
+  width axis matches by bundle diff.
 
 ## Uninstall
 

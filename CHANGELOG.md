@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-10-17
+
+### Changed
+
+- **The picker no longer resolves every tier against the live column** — the
+  fixed tiers keep their nominal px (medium 1120px, wide 1280px, ultra
+  1400px). Standard shows the app default px it resolves to right now
+  (`clamp(680px, column × 0.64, 920px)`, e.g. 710px); full shows the live
+  maximum (`column − 176px`, e.g. 934px) instead of a prose label. Custom
+  shows its recorded width or 「未设置 / Not set」. Previously all values were
+  re-resolved at the current column, so on a narrow window medium/wide/ultra
+  all read the same clamped px (e.g. 934px) and the shelf looked broken.
+- **Custom is actionable before the first drag** — the menu item is no longer
+  disabled. Picking it keeps the current width and opens a guide at the
+  conversation's right edge: the native right handle is highlighted and a
+  bubble shows「拖拽右侧边缘调整对话宽度 / Drag the right edge to resize」.
+  Click-away or Escape cancels the guide and restores the previous tier.
+
+### Fixed
+
+- **The width readout only appeared on the first custom drag** — the guide was
+  opened exclusively for an unset custom width, so later drags had no handle
+  highlight and no live px bubble. Every handle press now opens the readout
+  (live width while dragging, final value for 800ms after release), whether
+  custom was already recorded or the drag started directly from another tier.
+- **DSH 0.2.1-rc.1 width axis contract-checked** — the width axis, mount gate
+  and layout/locale services are unchanged from 0.2.0-rc.2; confirmed by
+  bundle diff against the 0.2.1-rc.1 `dsh-client-ui-conversation` /
+  `dsh-client-ui-layout` packages (not yet re-run end-to-end on a live
+  0.2.1-rc.1 instance). The window-width clamp seen after upgrading is the
+  app's native `column − 176px` cap, not a regression.
+
 ## [1.0.7] - 2026-10-08
 
 ### Fixed

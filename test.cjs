@@ -151,6 +151,8 @@ const localeDicts = {
     "tier.ultra": "超宽",
     "tier.full": "全宽",
     "tier.custom": "自定义",
+    "value.custom.unset": "未设置",
+    "guide.hint": "拖拽右侧边缘调整对话宽度",
     "button.aria": "对话区宽度档位：{label}（{value}），点击选择档位",
     "button.title.summary": "对话区宽度档位：{label}（{value}）",
     "button.title.hint": "点击选择：{list}",
@@ -162,6 +164,8 @@ const localeDicts = {
     "tier.ultra": "Ultra",
     "tier.full": "Full",
     "tier.custom": "Custom",
+    "value.custom.unset": "Not set",
+    "guide.hint": "Drag the right edge to resize",
     "button.aria": "Chat width tier: {label} ({value}). Click to choose a tier.",
     "button.title.summary": "Chat width tier: {label} ({value})",
     "button.title.hint": "Click to choose: {list}",
@@ -325,6 +329,22 @@ setTimeout(() => {
     menuItem("standard").querySelector(".dshwm-label").textContent === "标准",
     "zh tier labels by default",
   );
+  assert(
+    menuItem("standard").querySelector(".dshwm-value").textContent === "920px",
+    "standard advertises the app default px at the live column",
+  );
+  assert(
+    menuItem("medium").querySelector(".dshwm-value").textContent === "1120px",
+    "medium advertises its nominal 1120px",
+  );
+  assert(
+    menuItem("full").querySelector(".dshwm-value").textContent === "1824px",
+    "full advertises the live maximum (column − 176px)",
+  );
+  assert(
+    menuItem("custom").querySelector(".dshwm-value").textContent === "未设置",
+    "custom reads 未设置 before the first drag",
+  );
   assert(btn().title.includes("点击选择"), "button title hint in zh");
 
   /* 2. menu: pick full → sidebar collapsed via layout service, column max */
@@ -362,6 +382,12 @@ setTimeout(() => {
   assert(fakeBody.getAttribute("data-dsh-width") === "custom", "drag switches to the custom tier");
   assert(storage["dsh.widthTier"] === "custom", "custom tier persisted");
   assert(menuItem("custom").classList.contains("selected") === true, "custom selected in the menu");
+  const guideEl0 = fakeBody.children.find((c) => c.id === "dsh-width-guide");
+  assert(guideEl0.hidden === false, "a direct handle drag opens the live readout");
+  assert(
+    guideEl0.querySelector(".dshwg-text").textContent === "1400px",
+    "the live readout starts at the current width",
+  );
   shellB.style.setProperty("--dsh-chat-user-width", "1100px"); // the app's drag writes
   firePointer("pointerup");
   assert(storage["dsh.widthTierCustom"] === "1100", "dragged width recorded");
@@ -369,6 +395,30 @@ setTimeout(() => {
     menuItem("custom").querySelector(".dshwm-value").textContent === "1100px",
     "custom menu item shows the dragged width",
   );
+  assert(
+    guideEl0.querySelector(".dshwg-text").textContent === "1100px",
+    "the live readout settles on the dragged width",
+  );
+
+  /* 4b2. a SECOND drag keeps the readout (regression: only the first guided
+   * drag showed the handle highlight + width bubble). */
+  shellB.style.removeProperty("--dsh-chat-user-width");
+  fakeRoot.__vars["--dsh-chat-content-width"] = "748px";
+  firePointer("pointerdown");
+  assert(
+    fakeBody.attrs.get("data-dsh-width-guide") === "custom",
+    "repeat drag re-highlights the handle",
+  );
+  assert(guideEl0.hidden === false, "repeat drag re-opens the live readout");
+  shellB.style.setProperty("--dsh-chat-user-width", "1000px");
+  fakeRoot.__vars["--dsh-chat-content-width"] = "1000px";
+  (docListeners.pointermove || []).forEach((fn) => fn({ target: handle }));
+  assert(
+    guideEl0.querySelector(".dshwg-text").textContent === "1000px",
+    "repeat drag updates the live readout",
+  );
+  firePointer("pointerup");
+  assert(storage["dsh.widthTierCustom"] === "1000", "repeat drag records the new width");
 
   /* 4c. custom is re-selectable: wide then back to the dragged width */
   btn().click();
@@ -376,7 +426,11 @@ setTimeout(() => {
   assert(userWidth() === "1280px", "wide re-applies after a drag");
   btn().click();
   menuItem("custom").click();
-  assert(userWidth() === "1100px", "custom re-applies the dragged width");
+  assert(userWidth() === "1000px", "custom re-applies the dragged width");
+  assert(
+    fakeBody.attrs.has("data-dsh-width-guide") === false,
+    "a recorded custom pick applies directly (no guide)",
+  );
   const closesBeforeSnapshot = closeCalls();
 
   /* 5. the rightbar is NEVER touched: reopening it while a non-standard tier
@@ -405,7 +459,7 @@ setTimeout(() => {
     /* 6. after the debounced heal, the tier is re-applied to the remounted root */
     setTimeout(() => {
       assert(
-        userWidth() === "1100px",
+        userWidth() === "1000px",
         "width re-applied to the remounted root after conversation switch",
       );
       assert(
@@ -434,40 +488,107 @@ setTimeout(() => {
         );
         assert(btn().getAttribute("aria-label").includes("Chat width tier"), "button aria-label follows the locale");
         assert(btn().title.includes("Click to choose"), "button title hint follows the locale");
+        assert(
+          menuItem("standard").querySelector(".dshwm-value").textContent === "920px",
+          "standard keeps a px value in English (no prose label)",
+        );
+        assert(
+          menuItem("full").querySelector(".dshwm-value").textContent === "1824px",
+          "full shows the live maximum in English",
+        );
         localeService.setLocale("zh");
         assert(
           menuItem("standard").querySelector(".dshwm-label").textContent === "标准",
           "back to Chinese re-renders",
         );
 
-        /* 8b. the displayed value is the px the app actually applies (v1.0.7):
-         * `standard` follows the app's own default formula and `full` the live
-         * column, instead of the old hard-coded 748px / 100%. */
+        /* 8b. the picker advertises nominal px for the fixed tiers, while
+         * standard/full resolve against the live column (full = the maximum). */
         assert(
           menuItem("standard").querySelector(".dshwm-value").textContent === "920px",
-          "standard shows the resolved app default, not 748px",
-        );
-        assert(
-          menuItem("full").querySelector(".dshwm-value").textContent === "1824px",
-          "full shows the live column width, not 100%",
+          "standard shows the app default px at the live column",
         );
         assert(
           menuItem("medium").querySelector(".dshwm-value").textContent === "1120px",
-          "medium resolves to the widened 1120px shelf",
+          "medium shows its nominal 1120px",
+        );
+        assert(
+          menuItem("wide").querySelector(".dshwm-value").textContent === "1280px",
+          "wide shows its nominal 1280px",
+        );
+        assert(
+          menuItem("ultra").querySelector(".dshwm-value").textContent === "1400px",
+          "ultra shows its nominal 1400px",
+        );
+        assert(
+          menuItem("full").querySelector(".dshwm-value").textContent === "1824px",
+          "full shows the live maximum (column − 176px)",
         );
 
-        /* 8c. a window resize (narrower column) re-renders the resolved values,
-         * so the copy never claims a width the app would clamp away. */
+        /* 8c. a narrower column updates standard/full but keeps the fixed
+         * tiers at their nominal values. */
         remounted.offsetWidth = 1000;
         (winListeners.resize || []).forEach((fn) => fn());
         setTimeout(() => {
           assert(
             menuItem("standard").querySelector(".dshwm-value").textContent === "680px",
-            "resize re-renders standard through the app default",
+            "resize re-resolves standard through the app default",
           );
           assert(
-            menuItem("wide").querySelector(".dshwm-value").textContent === "824px",
-            "resize re-renders the clamped tier value",
+            menuItem("wide").querySelector(".dshwm-value").textContent === "1280px",
+            "resize keeps the nominal wide value",
+          );
+          assert(
+            menuItem("full").querySelector(".dshwm-value").textContent === "824px",
+            "resize re-resolves the full maximum",
+          );
+
+          /* 8d. custom before the first drag: picking it opens the right-edge
+           * guide and the live readout follows the dragged transcript width. */
+          delete storage["dsh.widthTierCustom"];
+          btn().click();
+          assert(
+            menuItem("custom").querySelector(".dshwm-value").textContent === "未设置",
+            "custom reads 未设置 again after clearing the record",
+          );
+          menuItem("custom").click();
+          assert(fakeBody.getAttribute("data-dsh-width") === "custom", "guide pick selects custom");
+          assert(
+            fakeBody.getAttribute("data-dsh-width-guide") === "custom",
+            "guide marker set on the body",
+          );
+          const guideEl = fakeBody.children.find((c) => c.id === "dsh-width-guide");
+          assert(!!guideEl && guideEl.hidden === false, "guide bubble is visible");
+          assert(
+            guideEl.querySelector(".dshwg-text").textContent === "拖拽右侧边缘调整对话宽度",
+            "guide shows the drag hint",
+          );
+
+          firePointer("pointerdown");
+          assert(guideEl.dataset.mode === "live", "guide switches to the live readout on press");
+          assert(
+            guideEl.querySelector(".dshwg-text").textContent === "748px",
+            "live readout starts at the current transcript width",
+          );
+          remounted.__vars["--dsh-chat-content-width"] = "900px";
+          shellB.style.setProperty("--dsh-chat-user-width", "900px");
+          (docListeners.pointermove || []).forEach((fn) => fn({ target: handle }));
+          assert(
+            guideEl.querySelector(".dshwg-text").textContent === "900px",
+            "live readout follows the dragged width",
+          );
+          firePointer("pointerup");
+          assert(storage["dsh.widthTierCustom"] === "900", "guide drag records the settled width");
+          assert(
+            menuItem("custom").querySelector(".dshwm-value").textContent === "900px",
+            "custom menu item shows the recorded width",
+          );
+
+          (docListeners.keydown || []).forEach((fn) => fn({ key: "Escape" }));
+          assert(guideEl.hidden === true, "Escape hides the guide");
+          assert(
+            fakeBody.attrs.has("data-dsh-width-guide") === false,
+            "guide marker removed after Escape",
           );
 
           /* 9. disposer cleans everything up */
@@ -475,9 +596,12 @@ setTimeout(() => {
           assert(mutationCb === null, "mutation observer disconnected on dispose");
           assert(!fakeBody.children.includes(btn()), "button removed on dispose");
           assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
+          assert(!fakeBody.children.includes(guideEl), "guide removed on dispose");
           assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
+          assert(!fakeBody.attrs.has("data-dsh-width-guide"), "guide attribute removed");
           assert(userWidth() === undefined, "width override removed on dispose");
           assert((winListeners.resize || []).length === 0, "resize listener removed on dispose");
+          assert((docListeners.pointermove || []).length === 0, "pointermove listener removed on dispose");
           console.log("\nAll assertions passed.");
           process.exit(0);
         }, 50);
