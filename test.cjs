@@ -1,12 +1,13 @@
 /*
- * Minimal DOM stub smoke test for the dsh-width-tiers client bundle.
+ * DOM-stub regression test for the dsh-width-tiers client bundle.
  * Loads lib/client.js through a fake __ModuleLoader__, calls apply(ctx) with
- * a fake layout service, and validates: tier restore + migration, content
- * width override on the runtime-detected root, sidebar handling via
- * ctx.layout (full collapses, standard restores only when we collapsed it,
- * medium/wide/ultra never touch it), details close + self-heal, menu
- * behavior, and the effect disposer.
- * Run: node test.js
+ * fake layout/locale services, and validates: tier restore, the app width
+ * preference semantics (nominal target vs clamped inline, native preference
+ * preservation), zero-layout
+ * handling, sidebar ownership, custom-guide lifecycle (including
+ * pointercancel), locale dictionaries, keyboard menu navigation, storage
+ * synchronization, resize-frame deduplication, and the effect disposer.
+ * Run: node test.cjs
  */
 "use strict";
 
@@ -70,6 +71,7 @@ function makeEl(tag) {
     setAttribute(name, value) { this.attrs.set(name, String(value)); },
     getAttribute(name) { return this.attrs.has(name) ? this.attrs.get(name) : null; },
     set innerHTML(html) {
+      this._html = String(html);
       this.children = [];
       const re = /<span class="([^"]+)">([^<]*)<\/span>/g;
       let m;
@@ -79,6 +81,16 @@ function makeEl(tag) {
         span.textContent = m[2];
         this.children.push(span);
       }
+    },
+    focus() {
+      document.activeElement = this;
+    },
+    blur() {
+      if (document.activeElement === this) document.activeElement = null;
+    },
+    /* fixed geometry for positionGuide; enough to exercise both sides */
+    getBoundingClientRect() {
+      return { top: 120, height: 320, left: 820, right: 828 };
     },
     addEventListener(ev, fn) { (this.handlers[ev] ||= []).push(fn); },
     appendChild(el2) { el2.parentNode = this; el2.parentElement = this; this.children.push(el2); return el2; },
@@ -138,46 +150,21 @@ const layoutService = {
   },
 };
 
-/* ---- fake locale service: mirrors the app's LocaleRuntime contract ---- */
+/* ---- fake locale service: uses the dictionaries the plugin registers ---- */
 const localeListeners = new Set();
+const registeredLocales = new Map();
 let activeLocale = "zh";
-/* Smoke-test mirrors of the bundle's dictionaries (keep in sync with
- * lib/client.js — the bundle keeps its own copies). */
-const localeDicts = {
-  zh: {
-    "tier.standard": "标准",
-    "tier.medium": "中等",
-    "tier.wide": "宽",
-    "tier.ultra": "超宽",
-    "tier.full": "全宽",
-    "tier.custom": "自定义",
-    "value.custom.unset": "未设置",
-    "guide.hint": "拖拽右侧边缘调整对话宽度",
-    "button.aria": "对话区宽度档位：{label}（{value}），点击选择档位",
-    "button.title.summary": "对话区宽度档位：{label}（{value}）",
-    "button.title.hint": "点击选择：{list}",
-  },
-  en: {
-    "tier.standard": "Standard",
-    "tier.medium": "Medium",
-    "tier.wide": "Wide",
-    "tier.ultra": "Ultra",
-    "tier.full": "Full",
-    "tier.custom": "Custom",
-    "value.custom.unset": "Not set",
-    "guide.hint": "Drag the right edge to resize",
-    "button.aria": "Chat width tier: {label} ({value}). Click to choose a tier.",
-    "button.title.summary": "Chat width tier: {label} ({value})",
-    "button.title.hint": "Click to choose: {list}",
-  },
-};
 const localeService = {
-  register() {
-    return () => {};
+  register(ns, dicts) {
+    registeredLocales.set(ns, dicts);
+    return () => {
+      registeredLocales.delete(ns);
+    };
   },
-  bind() {
+  bind(ns) {
     return (key, params) => {
-      let s = localeDicts[activeLocale]?.[key] ?? localeDicts.zh[key] ?? key;
+      const dicts = registeredLocales.get(ns);
+      let s = dicts?.[activeLocale]?.[key] ?? dicts?.zh?.[key] ?? key;
       if (params) s = s.replace(/\{(\w+)\}/g, (m, n) => (n in params ? String(params[n]) : m));
       return s;
     };
@@ -213,9 +200,29 @@ class MutationObserverStub {
 }
 global.MutationObserver = MutationObserverStub;
 
+/* fake ResizeObserver: tests fire the callback manually to simulate a column
+ * width change (sidebar/rightbar/window), which full width must follow. */
+let resizeObserverCb = null;
+let resizeObserverDisconnected = false;
+class ResizeObserverStub {
+  constructor(cb) {
+    resizeObserverCb = cb;
+    resizeObserverDisconnected = false;
+  }
+  observe() {}
+  disconnect() {
+    resizeObserverDisconnected = true;
+  }
+}
+global.ResizeObserver = ResizeObserverStub;
+
 /* fake animation frames: heal runs on the next macrotask, well within the
  * test waits */
-global.requestAnimationFrame = (cb) => setTimeout(() => cb(), 0);
+let rafCalls = 0;
+global.requestAnimationFrame = (cb) => {
+  rafCalls++;
+  return setTimeout(() => cb(), 0);
+};
 global.cancelAnimationFrame = (id) => clearTimeout(id);
 
 const docListeners = {};
@@ -223,6 +230,7 @@ global.document = {
   body: fakeBody,
   head: { appendChild() {} },
   createElement: makeEl,
+  activeElement: null,
   contains: (el) => currentRoots.includes(el),
   querySelector(sel) {
     if (sel === "[data-shell-overlay]") return frameEl; // mount gate
@@ -234,7 +242,7 @@ global.document = {
     return null;
   },
   querySelectorAll(sel) {
-    if (sel === "[class]") return currentRoots;
+    if (sel === "[class]" || sel === "[data-conversation-content]") return currentRoots;
     return [];
   },
   addEventListener(ev, fn) { (docListeners[ev] ||= []).push(fn); },
@@ -288,20 +296,32 @@ function assert(cond, msg) {
 }
 
 /* ---- drive the plugin ---- */
-let dispose = null;
+const disposers = [];
 const ctx = {
   layout: layoutService,
   locale: localeService,
   effect(fn) {
     const d = fn();
-    dispose = d;
+    if (typeof d === "function") disposers.push(d);
     return d;
   },
 };
 mod.apply(ctx);
+const disposeAll = () => {
+  while (disposers.length > 0) {
+    const d = disposers.pop();
+    if (typeof d === "function") d();
+  }
+};
 assert(
   JSON.stringify(mod.inject) === JSON.stringify(["layout", "locale"]),
   "bundle injects the layout + locale services",
+);
+const pluginLocales = registeredLocales.get("width-tiers");
+assert(
+  !!pluginLocales
+    && JSON.stringify(Object.keys(pluginLocales.zh).sort()) === JSON.stringify(Object.keys(pluginLocales.en).sort()),
+  "zh/en dictionaries have the same key set",
 );
 
 const toggleCalls = () => log.filter((x) => x === "layout.toggleSidebar").length;
@@ -591,19 +611,148 @@ setTimeout(() => {
             "guide marker removed after Escape",
           );
 
-          /* 9. disposer cleans everything up */
-          dispose();
-          assert(mutationCb === null, "mutation observer disconnected on dispose");
-          assert(!fakeBody.children.includes(btn()), "button removed on dispose");
-          assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
-          assert(!fakeBody.children.includes(guideEl), "guide removed on dispose");
-          assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
-          assert(!fakeBody.attrs.has("data-dsh-width-guide"), "guide attribute removed");
-          assert(userWidth() === undefined, "width override removed on dispose");
-          assert((winListeners.resize || []).length === 0, "resize listener removed on dispose");
-          assert((docListeners.pointermove || []).length === 0, "pointermove listener removed on dispose");
-          console.log("\nAll assertions passed.");
-          process.exit(0);
+          /* 9. regression checks for the P1-P3 fixes. Each resize waits one
+           * frame, exactly like the browser's rAF-driven handler. */
+          (async () => {
+            const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const PREF = "dsh.conversation.contentWidth";
+
+            /* 9. standard is the app-default reset: it clears the app
+             * preference, including a native-drag value. */
+            remounted.offsetWidth = 2000;
+            storage[PREF] = "1000";
+            shellB.style.setProperty("--dsh-chat-user-width", "1000px");
+            btn().click();
+            menuItem("standard").click();
+            assert(!(PREF in storage), "standard clears the app preference");
+            assert(userWidth() === undefined, "standard removes the width override");
+            assert(
+              menuItem("standard").querySelector(".dshwm-value").textContent === "920px",
+              "standard advertises the app default",
+            );
+
+            /* 9a. a fixed tier picked on a narrow column stores the nominal
+             * target, not the clamp; widening restores it. */
+            remounted.offsetWidth = 1000;
+            (winListeners.resize || []).forEach((fn) => fn());
+            btn().click();
+            menuItem("wide").click();
+            assert(storage[PREF] === "1280", "narrow pick stores the unclamped wide target");
+            assert(userWidth() === "824px", "narrow column applies the clamped width");
+            remounted.offsetWidth = 2000;
+            (winListeners.resize || []).forEach((fn) => fn());
+            await wait(50);
+            assert(userWidth() === "1280px", "widening restores the configured wide width");
+            assert(storage[PREF] === "1280", "app preference stays at the nominal target");
+            assert(
+              menuItem("wide").querySelector(".dshwm-value").textContent === "1280px",
+              "menu advertises the configured width after widening",
+            );
+
+            /* 9a2. two resize events share one animation frame. */
+            const rafBefore = rafCalls;
+            (winListeners.resize || []).forEach((fn) => fn());
+            (winListeners.resize || []).forEach((fn) => fn());
+            assert(rafCalls - rafBefore === 1, "two resize events share one animation frame");
+            await wait(50);
+
+            /* 9b. a zero-layout root keeps the nominal preference instead of
+             * persisting the 640px floor; layout recovery applies the tier. */
+            remounted.offsetWidth = 0;
+            btn().click();
+            menuItem("medium").click();
+            assert(storage[PREF] === "1120", "zero-layout pick stores the nominal target");
+            remounted.offsetWidth = 2000;
+            (winListeners.resize || []).forEach((fn) => fn());
+            await wait(50);
+            assert(userWidth() === "1120px", "layout recovery applies the picked tier");
+            assert(storage[PREF] === "1120", "layout recovery keeps the nominal target");
+
+            /* 9c. pointercancel ends the live guide instead of leaving it
+             * stuck in dragging mode. */
+            btn().click();
+            menuItem("custom").click();
+            const leftHandle = makeEl("div");
+            leftHandle.setAttribute("data-width-handle", "left");
+            (docListeners.pointerdown || []).forEach((fn) => fn({ target: leftHandle }));
+            const guideAfterPress = fakeBody.children.find((c) => c.id === "dsh-width-guide");
+            assert(guideAfterPress.hidden === false, "left-handle press opens the live guide");
+            (docListeners.pointercancel || []).forEach((fn) => fn({ target: leftHandle }));
+            assert(guideAfterPress.hidden === true, "pointercancel closes the live guide");
+
+            /* 9d. full -> custom -> standard restores the sidebar this plugin
+             * collapsed. */
+            btn().click();
+            menuItem("full").click();
+            const collapsedAfterFull = sidebarCollapsed;
+            remounted.offsetWidth = 1500;
+            resizeObserverCb && resizeObserverCb();
+            assert(userWidth() === "1324px", "full follows the column width via ResizeObserver");
+            remounted.offsetWidth = 2000;
+            resizeObserverCb && resizeObserverCb();
+            btn().click();
+            menuItem("custom").click();
+            btn().click();
+            menuItem("standard").click();
+            assert(collapsedAfterFull === true, "full collapses the sidebar");
+            assert(sidebarCollapsed === false, "standard restores the plugin-owned sidebar after custom");
+
+            /* 9e. another tab's tier change is adopted without rewriting it. */
+            storage["dsh.widthTier"] = "wide";
+            (winListeners.storage || []).forEach((fn) => fn({
+              key: "dsh.widthTier",
+              newValue: "wide",
+              storageArea: window.localStorage,
+            }));
+            assert(fakeBody.getAttribute("data-dsh-width") === "wide", "storage event adopts the tier");
+            assert(userWidth() === "1280px", "storage event applies the tier width");
+
+            /* 9f. keyboard navigation: open focuses the active item, ArrowDown
+             * moves, Escape closes and returns focus to the button. */
+            btn().click();
+            assert(
+              document.activeElement === menuItem("wide"),
+              "opening the menu focuses the active tier",
+            );
+            (docListeners.keydown || []).forEach((fn) => fn({ key: "ArrowDown", preventDefault() {} }));
+            assert(
+              document.activeElement === menuItem("ultra"),
+              "ArrowDown moves to the next tier",
+            );
+            (docListeners.keydown || []).forEach((fn) => fn({ key: "Escape" }));
+            assert(menu().hidden === true, "Escape closes the menu");
+            assert(document.activeElement === btn(), "Escape returns focus to the button");
+
+            /* 9g. one bar per tier distinguishes full from custom. */
+            assert(
+              (btn()._html.match(/<rect/g) || []).length === 6,
+              "button icon renders one bar per tier",
+            );
+
+            /* 10. disposer cleans everything up, including the added
+             * listeners and the plugin-owned app preference. */
+            disposeAll();
+            assert(mutationCb === null, "mutation observer disconnected on dispose");
+            assert(!fakeBody.children.includes(btn()), "button removed on dispose");
+            assert(!fakeBody.children.includes(menu()), "menu removed on dispose");
+            assert(!fakeBody.children.includes(guideEl), "guide removed on dispose");
+            assert(!fakeBody.attrs.has("data-dsh-width"), "body attribute removed");
+            assert(!fakeBody.attrs.has("data-dsh-width-guide"), "guide attribute removed");
+            assert(userWidth() === undefined, "width override removed on dispose");
+            assert(!(PREF in storage), "plugin-owned app preference removed on dispose");
+            assert((winListeners.resize || []).length === 0, "resize listener removed on dispose");
+            assert((winListeners.load || []).length === 0, "load listener removed on dispose");
+            assert((winListeners.storage || []).length === 0, "storage listener removed on dispose");
+            assert((docListeners.pointermove || []).length === 0, "pointermove listener removed on dispose");
+            assert((docListeners.pointercancel || []).length === 0, "pointercancel listener removed on dispose");
+            assert(resizeObserverDisconnected === true, "width ResizeObserver disconnected on dispose");
+            assert(registeredLocales.size === 0, "locale dictionaries unregistered on dispose");
+            console.log("\nAll assertions passed.");
+            process.exit(0);
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
         }, 50);
       }, 400);
     }, 400);

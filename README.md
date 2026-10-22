@@ -1,55 +1,41 @@
-# dsh-width-tiers
+<h1 align="center">dsh-width-tiers</h1>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">Chat content-width tiers for the DeepSeek Harness Web GUI.</p>
 
-A client plugin for the **DeepSeek Harness Web GUI** that adds **chat content
-width tiers** with a floating picker button (bottom-right, above the
-composer): 标准 / 中等 / 宽 / 超宽 / 全宽 / 自定义 (standard / medium / wide /
-ultra / full / custom).
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-width-tiers"><img alt="npm" src="https://img.shields.io/npm/v/dsh-width-tiers?style=flat-square"></a>
+  <a href="https://github.com/aaronlei/dsh-width-tiers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/aaronlei/dsh-width-tiers?style=flat-square"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square"></a>
+  <a href="#compatibility"><img alt="DSH 0.1.7+" src="https://img.shields.io/badge/DSH-0.1.7%2B-blue?style=flat-square"></a>
+</p>
 
-## Why
-
-The DSH Web app caps the message column — and every table inside it — at
-`--dsh-chat-content-width` (0.1.7–0.2.0 default `clamp(680px, column × 0.64,
-920px)`), no matter how wide your window is, so wide tables always need
-horizontal scrolling.
-
-This plugin sets the width per tier through the app's **native width axis**
-(`--dsh-chat-user-width` + the app's `dsh.conversation.contentWidth`
-preference), letting the app clamp every value to "column − 176px handle
-budget" — so the built-in drag handles keep working:
+## Tiers
 
 | Tier | Content width | Sidebar |
-|---|---|---|
-| standard 标准 | app default | untouched |
-| medium 中等 | 1120px | untouched |
-| wide 宽 | 1280px | untouched |
-| ultra 超宽 | 1400px | untouched |
-| full 全宽 | column minus the handle budget (fills the available width) | collapsed to the icon rail |
-| custom 自定义 | your dragged width, re-selectable from the menu | untouched |
+| --- | --- | --- |
+| Standard 标准 | App default: `max(680px, min(column × 0.64, 920px))` | unchanged |
+| Medium 中等 | 1120px | unchanged |
+| Wide 宽 | 1280px | unchanged |
+| Ultra 超宽 | 1400px | unchanged |
+| Full 全宽 | `max(640px, column − 176px)` | collapsed to icon rail |
+| Custom 自定义 | width recorded from a native drag | unchanged |
 
-The menu and the button title show nominal px for the fixed tiers (medium
-1120px, wide 1280px, ultra 1400px). Standard shows the app default px it
-resolves right now (`clamp(680px, column × 0.64, 920px)`, e.g. 710px); full
-shows the live maximum (`column − 176px`, e.g. 934px); custom shows its
-recorded width or "Not set". The app still clamps the applied width to
-"column − 176px"; on a narrow window a higher tier therefore behaves like
-"full".
+Fixed and custom widths are clamped by the app to
+`max(640px, column − 176px)`; the standard tier follows the app default
+(680–920px). On a narrow window a wider fixed tier therefore behaves like
+`full`.
 
-On narrow windows wider tiers are clamped to the available column, so nothing
-overflows under the sidebar.
+## Features
 
-The choice persists in `localStorage` and is restored on the next visit; the
-menu highlights the current tier, and the button's five level-bars show it at
-a glance (all lit for custom). Dragging one of the app's native edge handles
-switches the picker to the custom tier — the plugin stands aside for native
-drags.
-
-Before the first drag, picking custom does not silently keep a width: a guide
-appears at the conversation's right edge and highlights the width handle.
-While dragging, a bubble shows the live transcript width; releasing records it
-as the custom value. Every later handle drag opens the same highlight + live
-readout, no matter which tier was active.
+- Uses the app's native width axis (`--dsh-chat-user-width` and
+  `dsh.conversation.contentWidth`), so the built-in drag handles keep working.
+- Persists the selected tier and restores it on the next visit.
+- Follows **Settings → Language** (中文 / English).
+- Menu supports ArrowUp/Down, Home/End, Escape and Tab, with focus restoration.
+- Tier changes sync across tabs.
+- Respects `prefers-reduced-motion`.
+- Never touches the right panel. Only `full` collapses the left sidebar, and
+  you can expand it again at any time.
 
 ## Install
 
@@ -57,68 +43,57 @@ readout, no matter which tier was active.
 dsh plugin --profile web add dsh-width-tiers
 ```
 
-The bundle patch then inserts the `dsh-width-tiers` loader entry itself — no
-manual `cordis.patch.yml` edits needed.
+Restart `dsh web`, then hard-refresh the page. A six-bar picker appears at the
+bottom-right.
 
-Restart `dsh web` (the plugin loads at boot) and hard-refresh the page
-(Ctrl+Shift+R). A round button with five bars appears at the bottom-right.
+For a local checkout:
 
-> Installing from a local checkout: `dsh plugin --profile web add file:/path/to/dsh-width-tiers`.
-> Local-development gotcha: `file:` dependencies are **copied** into the
-> profile's `node_modules` (pnpm does not symlink them). After editing the
-> plugin source, re-sync the copy (e.g. `rsync -a --delete --exclude .git
-> /path/to/dsh-width-tiers/ ~/.dsh/profiles/web/node_modules/dsh-width-tiers/`)
-> or re-install after removing it, then restart `dsh web` and hard-refresh.
+```bash
+dsh plugin --profile web add link:/path/to/dsh-width-tiers
+```
 
 ## Usage
 
-- Click the round button → pick a tier; the current one is highlighted.
-- `full` collapses the sidebar to the icon rail through the app's own toggle
-  — it is never force-hidden or locked: click a rail icon any time to expand
-  it, and it stays expanded.
-- The right panel (rightbar) is never touched: its track and panel are fully
-  owned by the app, and the conversation yields space to it on its own.
-  `standard` leaves the layout entirely to the app.
-
-## Language
-
-All picker copy (tier labels, button `aria-label` and title) follows the
-app's **Settings → Language** (中文 / English), through the app's own locale
-service. Switching the language re-renders the button and menu immediately;
-when no explicit language is chosen the app falls back to the browser's
-language, and Chinese is the last resort. No plugin-side setting needed.
+- Click the picker and choose a tier.
+- Picking `Custom` before the first drag opens a guide at the right edge; drag
+  a native handle to record a width.
+- Dragging any native handle switches to `Custom`; the plugin steps aside while
+  you drag.
+- `Standard` clears the width preference and returns to the app default.
+- `Full` collapses the left sidebar; the icon rail stays available.
 
 ## How it works
 
-- The element that defines `--dsh-chat-content-width` is **located at
-  runtime** (the first element whose computed value is non-empty) and the
-  tier is applied as an inline override — no hashed class names, so it
-  survives bundle upgrades.
-- Panels are driven through the **layout service** (`ctx.layout`), never by
-  simulating clicks.
-- The sidebar is only ever collapsed by the `full` tier; returning to
-  `standard` restores it only if this plugin collapsed it.
-- Dictionaries are registered with the app's **locale service**
-  (`ctx.locale.register` / `bind`) and re-rendered through its change
-  subscription, so the copy always matches the app's active language.
+- Locates the conversation body that declares `--dsh-chat-content-width`
+  (prefers `[data-conversation-content]`, skips the right sidebar's embedded
+  conversation), then writes `--dsh-chat-user-width` on its parent.
+- Stores the configured target in the app preference; only the inline width is
+  clamped to `max(640px, column − 176px)`.
+- Watches the column with `ResizeObserver` so `full` follows sidebar, rightbar
+  and window changes.
+- Drives panels through `ctx.layout` and registers copy through `ctx.locale`.
 
-## Limitations
+## Compatibility
 
-- Content width cannot exceed the window: on a narrow window, wider tiers are
-  capped by the available column (the picker keeps showing the nominal value;
-  the live bubble during a drag shows the applied width). Use `full` (which
-  also collapses the sidebar) for the maximum.
-- Requires the DSH Web client plugin system (dsh ≥ 0.1.0-rc.x with a `web`
-  profile). Verified on dsh 0.1.7-alpha.1 and 0.2.0-rc.2; the 0.2.1-rc.1
-  width axis matches by bundle diff.
+- DSH Web 0.1.7+ with a `web` profile.
+- Width axis checked against DSH 0.2.1-rc.2: 640px floor, 176px handle budget,
+  `--dsh-chat-*` variables, `data-width-handle`, layout/locale services.
 
-## Uninstall
+## Development
 
 ```bash
-dsh plugin --profile web remove dsh-width-tiers
+npm test
 ```
 
-then restart `dsh web`.
+The test loads the shipped `lib/client.js` bundle through a DOM stub; no live
+DSH instance is required. The package ships prebuilt `lib/` and does not
+include a `src/` tree.
+
+## Notes
+
+- Wider fixed tiers are clamped on narrow windows.
+- A custom width dragged on a narrow window is clamped by the app before it is
+  recorded.
 
 ## License
 

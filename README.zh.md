@@ -1,45 +1,38 @@
-# dsh-width-tiers（对话区宽度档位）
+<h1 align="center">dsh-width-tiers</h1>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">DeepSeek Harness Web GUI 的对话区内容宽度档位插件。</p>
 
-DeepSeek Harness Web GUI 的客户端插件：给对话区加**内容宽度档位选择器**
-（右下角圆形按钮，输入框上方），共 6 档：
-标准 / 中等 / 宽 / 超宽 / 全宽 / 自定义。
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-width-tiers"><img alt="npm" src="https://img.shields.io/npm/v/dsh-width-tiers?style=flat-square"></a>
+  <a href="https://github.com/aaronlei/dsh-width-tiers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/aaronlei/dsh-width-tiers?style=flat-square"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square"></a>
+  <a href="#兼容性"><img alt="DSH 0.1.7+" src="https://img.shields.io/badge/DSH-0.1.7%2B-blue?style=flat-square"></a>
+</p>
 
-## 为什么需要它
-
-DSH Web 把消息列——包括里面的所有表格——的宽度限制在
-`--dsh-chat-content-width`（0.1.7–0.2.0 默认
-`clamp(680px, 列宽 × 0.64, 920px)`），不管窗口多宽都不变，宽表格只能横向滚动。
-
-本插件通过应用自身的**原生宽度通道**（`--dsh-chat-user-width` +
-`dsh.conversation.contentWidth` 偏好）按档位设定宽度，由应用自身钳制到
-「列宽 − 176px 手柄预留」，因此自带的原生拖拽手柄始终可用：
+## 档位
 
 | 档位 | 内容宽度 | 侧边栏 |
-|---|---|---|
-| 标准 | 应用默认 | 不动 |
+| --- | --- | --- |
+| 标准 | 应用默认：`max(680px, min(列宽 × 0.64, 920px))` | 不动 |
 | 中等 | 1120px | 不动 |
 | 宽 | 1280px | 不动 |
 | 超宽 | 1400px | 不动 |
-| 全宽 | 列宽减手柄预留（占满可用宽度） | 收起为图标轨道 |
-| 自定义 | 拖拽原生手柄得出，可在菜单回切 | 不动 |
+| 全宽 | `max(640px, 列宽 − 176px)` | 收起为图标轨道 |
+| 自定义 | 原生拖拽记录的宽度 | 不动 |
 
-菜单与按钮标题中：中等 / 宽 / 超宽显示**固定标称值**（1120 / 1280 / 1400px），
-标准显示应用当前默认值（`clamp(680px, 列宽 × 0.64, 920px)`，如 710px），全宽
-显示当前列宽下的最大实际值（列宽 − 176px，如 934px），自定义显示已记录的
-宽度或「未设置」。实际生效宽度仍由应用按「列宽 − 176px」钳制；窄窗口下
-选定较高档位时，效果等同于「全宽」。
+固定档和自定义宽度会被应用钳制到 `max(640px, 列宽 − 176px)`；标准档
+使用应用默认的 680–920px。窄窗口下较宽的固定档等同「全宽」。
 
-窄窗口下超宽档位会自动被钳到可用宽度，不会溢出被侧栏覆盖。
+## 特性
 
-选择会记住（localStorage），下次打开自动恢复；菜单里当前档位高亮，按钮上
-的五条横条图标也直观显示当前档位（自定义档全亮）。拖动应用自带的
-对话区边缘手柄会自动切到「自定义」档，插件让位于原生拖拽。
-
-若从未拖拽过，点击「自定义」不会静默套用某个宽度：右侧对话边缘会出现
-拖拽引导，手柄高亮；拖拽时气泡实时显示对话列宽度，松开后记为该档的值。
-之后每次拖拽手柄（无论从哪个档位开始）都会重新高亮手柄并显示实时宽度。
+- 走应用原生宽度通道（`--dsh-chat-user-width` 与
+  `dsh.conversation.contentWidth`），自带拖拽手柄始终可用。
+- 记住当前档位，下次打开自动恢复。
+- 跟随 **设置 → 语言**（中文 / English）。
+- 菜单支持方向键、Home/End、Esc、Tab，并恢复焦点。
+- 档位选择跨标签页同步。
+- 支持 `prefers-reduced-motion`。
+- 不碰右侧面板；只有「全宽」会收起左侧栏，随时可以再展开。
 
 ## 安装
 
@@ -47,61 +40,51 @@ DSH Web 把消息列——包括里面的所有表格——的宽度限制在
 dsh plugin --profile web add dsh-width-tiers
 ```
 
-bundle patch 会自动插入 `dsh-width-tiers` 加载项——无需手动改
-`cordis.patch.yml`。
+重启 `dsh web` 并硬刷新页面。右下角会出现六条横条的圆形按钮。
 
-**重启 `dsh web`**（插件在启动时加载），再硬刷新页面（Ctrl+Shift+R）。
-右下角会出现五条横条的圆形按钮。
+本地目录：
 
-> 本地目录安装：`dsh plugin --profile web add file:/path/to/dsh-width-tiers`。
-> 本地开发注意：`file:` 依赖会被 **拷贝** 进 profile 的 node_modules（pnpm
-> 不会建软链）。改完插件源码后，需要重新同步拷贝（例如 `rsync -a --delete
-> --exclude .git /path/to/dsh-width-tiers/
-> ~/.dsh/profiles/web/node_modules/dsh-width-tiers/`）或先 remove 再 add，
-> 然后重启 `dsh web` 并硬刷新。
+```bash
+dsh plugin --profile web add link:/path/to/dsh-width-tiers
+```
 
 ## 使用
 
-- 点圆形按钮 → 选择档位，当前档位高亮。
-- 「全宽」通过应用自己的收起按钮把侧边栏收成图标轨道——**不会被锁死**：
-  随时点轨道图标展开，展开后保持展开。
-- 插件**不碰右侧面板**：右栏的轨道与面板完全由应用管理，展开时对话内容
-  自适应让位；「标准」档完全交给应用。
-
-## 多语言
-
-选择器里的所有文案（档位名、按钮的 `aria-label` 和标题）跟随应用的
-**设置 → 语言**（中文 / English），通过应用自身的 locale 服务实现。切换
-语言后按钮和菜单会立即重渲染；未显式选择语言时，应用会回退到浏览器语言，
-最后兜底中文。无需插件侧单独设置。
+- 点击圆形按钮选择档位。
+- 首次选择「自定义」会在右侧边缘显示引导；拖动原生手柄记录宽度。
+- 拖动任意原生手柄都会切换到「自定义」；拖拽期间插件让位于应用。
+- 「标准」清除宽度偏好，回到应用默认宽度。
+- 「全宽」收起左侧栏，图标轨道仍可随时展开。
 
 ## 原理
 
-- 运行时**自动定位**定义 `--dsh-chat-content-width` 的元素（第一个计算值
-  非空的元素），以行内样式覆盖——**不依赖哈希类名**，dsh 升级后依旧有效。
-- 面板操作走 **layout 服务**（`ctx.layout`），从不模拟点击。
-- 侧边栏只被「全宽」档收起；回到「标准」时，只有本插件自己收起的侧边栏
-  才会被恢复展开（你手动收的不动）。
-- 字典注册到应用的 **locale 服务**（`ctx.locale.register` / `bind`），并
-  订阅其变更事件重渲染，文案始终与应用的当前语言一致。
+- 定位声明 `--dsh-chat-content-width` 的对话 body（优先
+  `[data-conversation-content]`，跳过右侧栏的 embedded 对话），在它的
+  父级写入 `--dsh-chat-user-width`。
+- 应用偏好保存设定值，只有行内宽度按 `max(640px, 列宽 − 176px)` 钳制。
+- 用 `ResizeObserver` 观察列宽，让「全宽」跟随左右栏与窗口变化。
+- 面板操作走 `ctx.layout`，文案注册走 `ctx.locale`。
 
-## 已知限制
+## 兼容性
 
-- 内容宽度不可能超过窗口：窗口窄时，高档位会被可用列宽截断（选择器仍显示
-  标称值，实际宽度以拖拽气泡/窗口效果为准）；想要最大空间请用「全宽」
-  （同时收起侧边栏）。
-- 依赖 DSH Web 客户端插件体系（带 web profile 的 dsh ≥ 0.1.0-rc.x）。
-  已在 dsh 0.1.7-alpha.1、0.2.0-rc.2 上验证；0.2.1-rc.1 的宽度轴经 bundle
-  对比确认一致。
+- DSH Web 0.1.7+，带 `web` profile。
+- 宽度轴已按 DSH 0.2.1-rc.2 对照：640px 下限、176px 手柄预留、
+  `--dsh-chat-*` 变量、`data-width-handle`、layout/locale 服务。
 
-## 卸载
+## 开发
 
 ```bash
-dsh plugin --profile web remove dsh-width-tiers
+npm test
 ```
 
-然后重启 `dsh web`。
+测试通过 DOM stub 加载已发布的 `lib/client.js`，不需要启动真实 DSH。包内
+直接发布预构建的 `lib/`，不包含 `src/`。
+
+## 注意
+
+- 窄窗口下较宽的固定档位会被应用钳制。
+- 窄窗口下拖出的自定义宽度会先被应用钳制，再被记录。
 
 ## 许可证
 
-MIT —— 见 [LICENSE](LICENSE)。Copyright (c) 2026 aaronlei。
+MIT — 见 [LICENSE](LICENSE)。Copyright (c) 2026 aaronlei。

@@ -1,5 +1,58 @@
 # Changelog
 
+## [1.0.9] - 2026-10-22
+
+### Fixed
+
+- **A fixed tier picked on a narrow column no longer pins the width there.**
+  The plugin used to mirror the clamped px (e.g. 824px) into the app's
+  `dsh.conversation.contentWidth` preference, so widening the window kept the
+  old clamp; the menu advertised 1280px while the transcript stayed at 824px.
+  The preference now stores the configured target (1120/1280/1400px, the
+  recorded custom width, or the live cap for `full`), and the plugin only
+  applies the clamped px inline for the current column.
+- **Reduced-motion support:** the picker transition and pulse animation are
+  disabled under `prefers-reduced-motion: reduce`.
+- **A zero-layout root no longer persists the 640px floor.** Picking a tier
+  while the conversation body had no layout box skipped the apply instead of
+  writing 640 into the app preference; fixed/custom targets are still stored
+  and the width is applied once the column becomes measurable.
+- **`pointercancel` ends the custom-drag guide.** A cancelled touch/pen drag
+  no longer leaves the bubble stuck in dragging mode where click-away could
+  not dismiss it.
+- **Lifecycle cleanup completed.** The `load` listener, `storage` listener,
+  `pointercancel` listener, resize animation frame and `pulse` timer are
+  removed/cleared on dispose; resize events now share one animation frame
+  instead of scheduling one each.
+- **Sidebar ownership survives intermediate tiers.** `full -> custom/drag ->
+  standard` now restores a sidebar the plugin collapsed, instead of losing the
+  ownership flag. Unloading also restores that sidebar.
+- **Unload hands the app its preference back.** The plugin removes the exact
+  `dsh.conversation.contentWidth` value it wrote (leaving a native-drag value
+  untouched) and removes its inline width override.
+- **The root lookup prefers `[data-conversation-content]` and excludes the
+  right sidebar's embedded conversation**, so a sidebar chat cannot be
+  mistaken for the main transcript on a page without one.
+- **Menu accessibility and feedback:** ArrowUp/ArrowDown/Home/End/Escape
+  navigation with focus restoration, a visible focus ring, six level bars
+  (full = five lit, custom = all six), and tier changes synchronized across
+  tabs through `storage`.
+
+### Changed
+
+- `standard` remains the app-default reset: it clears
+  `dsh.conversation.contentWidth` (including a value left by an earlier native
+  drag) and removes the inline width.
+- The `button.title`/menu values and test suite were extended for the new
+  preference semantics, zero-layout recovery, pointercancel, sidebar
+  ownership, keyboard navigation, storage sync and resize-frame
+  deduplication.
+- Contract-checked against DSH `0.2.1-rc.2` (640px floor, 176px handle
+  budget, width variables, handle attributes, layout/locale services): no
+  differences from the checked `0.2.1-rc.1` axis. Regression coverage runs on
+  a Node DOM stub plus a minimal headless-Chrome page; no end-to-end run
+  against a live dsh instance yet.
+
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
