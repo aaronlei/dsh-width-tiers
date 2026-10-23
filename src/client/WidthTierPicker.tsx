@@ -148,6 +148,9 @@ export function WidthTierPicker({ usePicker, actions }: WidthTierPickerProps) {
 		pulsing ? "pulse" : "",
 	].filter(Boolean).join(" ");
 
+	/* `role="menu"` is exposed only while open: DSH's shortcut service treats
+	 * any `[role="menu"]` in the document as an open modal without checking
+	 * visibility, so a permanently hidden role blocks every shortcut. */
 	return (
 		<div ref={wrapperRef} data-dsh-width-tiers-host="">
 			<button
@@ -166,7 +169,7 @@ export function WidthTierPicker({ usePicker, actions }: WidthTierPickerProps) {
 			<div
 				ref={menuRef}
 				id="dsh-width-menu"
-				role="menu"
+				role={state.menuOpen ? "menu" : undefined}
 				hidden={!state.menuOpen}
 			>
 				{state.items.map((item) => (

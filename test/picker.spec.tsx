@@ -80,7 +80,9 @@ describe("WidthTierPicker", () => {
 		expect(button.hasAttribute("title")).toBe(true);
 		expect(container.querySelectorAll("#dsh-wide-toggle svg rect")).toHaveLength(6);
 		expect(container.querySelector("#dsh-width-menu")?.hasAttribute("hidden")).toBe(true);
-		expect(screen.getByRole("menu", { hidden: true })).toBeDefined();
+		/* DSH treats any [role="menu"] as an open modal; a closed menu must not
+		 * carry the role or every keyboard shortcut is blocked. */
+		expect(container.querySelector("#dsh-width-menu")?.hasAttribute("role")).toBe(false);
 	});
 
 	it("opens the menu on click and focuses the selected row", () => {
@@ -90,6 +92,7 @@ describe("WidthTierPicker", () => {
 
 		const menu = container.querySelector("#dsh-width-menu");
 		expect(menu?.hasAttribute("hidden")).toBe(false);
+		expect(menu?.getAttribute("role")).toBe("menu");
 		expect(button.getAttribute("aria-expanded")).toBe("true");
 		expect((document.activeElement as HTMLElement | null)?.getAttribute("data-tier")).toBe("wide");
 	});
@@ -111,7 +114,9 @@ describe("WidthTierPicker", () => {
 		fireEvent.click(button);
 		fireEvent.keyDown(document, { key: "Escape" });
 
-		expect(container.querySelector("#dsh-width-menu")?.hasAttribute("hidden")).toBe(true);
+		const menu = container.querySelector("#dsh-width-menu");
+		expect(menu?.hasAttribute("hidden")).toBe(true);
+		expect(menu?.hasAttribute("role")).toBe(false);
 		expect(document.activeElement).toBe(button);
 	});
 

@@ -22,6 +22,15 @@
 - Added `pnpm build`, `pnpm typecheck`, and `pnpm verify:client`; `prepack`
   rebuilds the published artifacts.
 
+### Fixed
+
+- **DSH keyboard shortcuts work again while the plugin is loaded.** The tier
+  menu kept `role="menu"` in the document while hidden, and DSH's shortcut
+  service treats any `[role="menu"]` as an open modal without checking
+  visibility, so every shortcut was blocked — including the double Escape that
+  stops a response and the settings shortcut. The React picker now exposes the
+  role only while the menu is open.
+
 ## [1.0.9] - 2026-10-22
 
 ### Fixed
