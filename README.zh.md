@@ -3,9 +3,14 @@
 <p align="center">DeepSeek Harness Web GUI 的对话区内容宽度档位插件。</p>
 
 <p align="center">
+  <a href="README.md">English</a> | <a href="README.zh.md">中文</a>
+</p>
+
+<p align="center">
   <a href="https://www.npmjs.com/package/dsh-width-tiers"><img alt="npm" src="https://img.shields.io/npm/v/dsh-width-tiers?style=flat-square"></a>
   <a href="https://github.com/aaronlei/dsh-width-tiers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/aaronlei/dsh-width-tiers?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/dsh-width-tiers"><img alt="Node version" src="https://img.shields.io/node/v/dsh-width-tiers?style=flat-square"></a>
   <a href="#兼容性"><img alt="DSH 0.2.x" src="https://img.shields.io/badge/DSH-0.2.x-blue?style=flat-square"></a>
 </p>
 
