@@ -23,11 +23,13 @@ import {
 	type TierId,
 } from "./model.ts";
 import { installStyles } from "./styles.ts";
-import {
-	createWidthRootLocator,
-	liveWidthPx,
-	widthTarget,
-} from "./width-root.ts";
+import { createWidthRootLocator, liveWidthPx, widthTarget } from "./width-root.ts";
+import type {
+	PickerActions,
+	PickerGuideStyle,
+	PickerSnapshot,
+	PickerSource,
+} from "./picker-state.ts";
 import type { TFunction } from "./locales.ts";
 
 /** Layout service slice used by the controller. */
@@ -42,32 +44,67 @@ export interface LocaleSubscription {
 
 /** Controller inputs, resolved by the plugin entry from the Cordis context. */
 export interface WidthTiersOptions {
-	/** Host element inside the frame-wide overlay layer. */
-	mount: HTMLElement;
 	layout: LayoutService;
 	locale: LocaleSubscription;
 	t: TFunction;
 }
 
-/** Resource handle returned to the plugin entry's effect. */
+/** Controller handle: observable state, user actions and resource cleanup. */
 export interface WidthTiersController {
+	source: PickerSource;
+	actions: PickerActions;
 	dispose(): void;
 }
 
+/** Estimated bubble width used when placing the guide beside a drag handle. */
+const GUIDE_WIDTH_PX = 180;
+/** How long the settled width stays visible after a drag. */
+const GUIDE_HIDE_MS = 800;
+/** Default guide placement (frame edge, vertical center). */
+const GUIDE_FALLBACK: PickerGuideStyle = { left: "auto", right: "24px", top: "50%" };
+
 /**
- * Own the width-tier picker: inject the stylesheet, build the floating button
- * and menu, drive the app's native width axis, and clean every resource up.
+ * Own the width-tier model: the app's native width axis, the tier/guide state
+ * machine and persistence. Rendering lives in the React picker, which reads
+ * `source` and dispatches `actions`; this controller never touches the picker
+ * DOM, so the UI can remount without rebuilding observers.
  * @param options - layout service, locale subscription and translate function.
- * @returns the disposer handle registered by the plugin entry.
+ * @returns observable state, actions and the disposer.
  */
 export function createWidthTiers(options: WidthTiersOptions): WidthTiersController {
-	const { layout, mount, t } = options;
+	const { layout, t } = options;
 	const roots = createWidthRootLocator();
 	const removeStyles = installStyles();
 
-	/* ---- helpers ---- */
 	const body = (): HTMLElement => document.body;
+	const listeners = new Set<() => void>();
 
+	let snapshot: PickerSnapshot;
+	let menuOpen = false;
+	let pulseSeq = 0;
+
+	let guideActive = false;
+	let guideDragging = false;
+	/* true while the bubble came from picking custom in the menu (its cancel
+	 * path restores the previous tier). Direct handle drags open the same
+	 * bubble but never "cancel" a tier. */
+	let guideFromMenu = false;
+	let guideMode: "hint" | "live" = "hint";
+	let guideText = "";
+	let guideStyle: PickerGuideStyle = GUIDE_FALLBACK;
+	let guideHandle: Element | null = null;
+	let guideHideTimer: number | null = null;
+	let guideWidth = GUIDE_WIDTH_PX;
+	let tierBeforeGuide: TierId = "standard";
+
+	/* Whether this plugin wrote the app's width preference. Native drags also
+	 * write it, so unload only removes a value this plugin owns. */
+	let preferenceOwned = false;
+	let preferenceWritten: string | null = null;
+	/* true while the CURRENT tier is the one that collapsed the sidebar */
+	let collapsedByTier = false;
+
+	/* ---- helpers ---- */
 	function currentTier(): TierId {
 		const value = body().getAttribute(TIER_ATTR);
 		const found = value === null ? undefined : TIERS.find((tier) => tier.id === value);
@@ -111,11 +148,83 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		if (isSidebarCollapsed()) layout.toggleSidebar();
 	}
 
-	/* Whether this plugin wrote the app's width preference. Native drags also
-	 * write it, so unload only removes a value this plugin owns. */
-	let preferenceOwned = false;
-	let preferenceWritten: string | null = null;
-	let pulseTimer: number | null = null;
+	/* Value shown in the picker. Fixed tiers advertise their nominal px;
+	 * standard and full are inherently relative to the current column, so they
+	 * show the px the app resolves right now (full is the column's maximum,
+	 * not a word). */
+	function tierValueText(tierId: string): string {
+		switch (tierId) {
+			case "standard": {
+				const root = roots.find();
+				if (root === null) return "—";
+				return `${Math.round(defaultWidthPx(root.offsetWidth))}px`;
+			}
+			case "medium":
+			case "wide":
+			case "ultra":
+				return `${NOMINAL_WIDTH_PX[tierId]}px`;
+			case "full": {
+				const root = roots.find();
+				if (root === null) return "—";
+				return `${Math.round(fullWidthPx(root.offsetWidth))}px`;
+			}
+			case "custom": {
+				const dragged = readNumber(CUSTOM_KEY);
+				return dragged === null ? t("value.custom.unset") : `${Math.round(dragged)}px`;
+			}
+			default:
+				return "—";
+		}
+	}
+
+	/* The px the app currently resolves for the transcript, after its own
+	 * clamp — what the guide's live readout shows. */
+	function guideValueText(): string {
+		const root = roots.find();
+		const px = root === null ? null : liveWidthPx(root);
+		return px === null ? "—" : `${px}px`;
+	}
+
+	function buildSnapshot(): PickerSnapshot {
+		const tier = currentTier();
+		const def = tierOf(tier);
+		const label = t(def.key);
+		const value = tierValueText(tier);
+		const summary = t("button.title.summary", { label, value });
+		const hint = t("button.title.hint", {
+			list: TIERS.map((tierDef) => `${t(tierDef.key)} ${tierValueText(tierDef.id)}`).join(" / "),
+		});
+		return {
+			tier,
+			menuOpen,
+			pulse: pulseSeq,
+			button: {
+				active: tier !== "standard",
+				label,
+				value,
+				ariaLabel: t("button.aria", { label, value }),
+				title: `${summary}\n${hint}`,
+			},
+			items: TIERS.map((tierDef) => ({
+				id: tierDef.id,
+				label: t(tierDef.key),
+				value: tierValueText(tierDef.id),
+				selected: tierDef.id === tier,
+			})),
+			guide: {
+				active: guideActive,
+				dragging: guideDragging,
+				mode: guideMode,
+				text: guideText,
+				style: guideStyle,
+			},
+		};
+	}
+
+	function emit(): void {
+		snapshot = buildSnapshot();
+		for (const listener of listeners) listener();
+	}
 
 	function applyContentWidth(tier: TierId): void {
 		const root = roots.find();
@@ -173,9 +282,6 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		}
 	}
 
-	/* true while the CURRENT tier is the one that collapsed the sidebar */
-	let collapsedByTier = false;
-
 	/* `persist` is false when another tab already wrote the tier: adopting it
 	 * must not write localStorage again. */
 	function applyTier(tier: TierId, persist = true): void {
@@ -202,203 +308,9 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			 * owns the collapsed state */
 			collapsedByTier = false;
 		}
-		syncButton();
-		syncMenu();
-		pulse();
+		pulseSeq += 1;
+		emit();
 	}
-
-	/* ---- floating button with level-bar icon ---- */
-	const btn = document.createElement("button");
-	btn.type = "button";
-	btn.id = "dsh-wide-toggle";
-	btn.setAttribute("aria-haspopup", "menu");
-	btn.setAttribute("aria-expanded", "false");
-
-	function barIcon(tier: TierId): string {
-		let idx = 0;
-		for (let i = 0; i < TIERS.length; i++) {
-			if (TIERS[i].id === tier) idx = i;
-		}
-		/* One bar per tier so full (5 bars) and custom (6 bars, all lit)
-		 * remain distinguishable. */
-		const widths = [3.5, 5.3, 7.1, 8.9, 10.7, 12.5];
-		let bars = "";
-		for (let b = 0; b < TIERS.length; b++) {
-			const y = 0.75 + b * 2.55;
-			bars += `<rect x="1.5" y="${y}" width="${widths[b]}" height="1.6" rx="0.8" fill="currentColor" opacity="${b <= idx ? 1 : 0.3}"/>`;
-		}
-		return `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">${bars}</svg>`;
-	}
-
-	/* Value shown in the picker. Fixed tiers advertise their nominal px;
-	 * standard and full are inherently relative to the current column, so they
-	 * show the px the app resolves right now (full is the column's maximum,
-	 * not a word). */
-	function tierValueText(tierId: string): string {
-		switch (tierId) {
-			case "standard": {
-				const root = roots.find();
-				if (root === null) return "—";
-				return `${Math.round(defaultWidthPx(root.offsetWidth))}px`;
-			}
-			case "medium":
-			case "wide":
-			case "ultra":
-				return `${NOMINAL_WIDTH_PX[tierId]}px`;
-			case "full": {
-				const root = roots.find();
-				if (root === null) return "—";
-				return `${Math.round(fullWidthPx(root.offsetWidth))}px`;
-			}
-			case "custom": {
-				const dragged = readNumber(CUSTOM_KEY);
-				return dragged === null ? t("value.custom.unset") : `${Math.round(dragged)}px`;
-			}
-			default:
-				return "—";
-		}
-	}
-
-	function syncButton(): void {
-		const tier = currentTier();
-		const def = tierOf(tier);
-		const label = t(def.key);
-		const value = tierValueText(tier);
-		const summary = t("button.title.summary", { label, value });
-		const hint = t("button.title.hint", {
-			list: TIERS.map((tierDef) => `${t(tierDef.key)} ${tierValueText(tierDef.id)}`).join(" / "),
-		});
-		btn.innerHTML = barIcon(tier);
-		btn.classList.toggle("active", tier !== "standard");
-		btn.setAttribute("aria-label", t("button.aria", { label, value }));
-		btn.title = `${summary}\n${hint}`;
-	}
-
-	/* ---- tier menu ---- */
-	const menu = document.createElement("div");
-	menu.id = "dsh-width-menu";
-	menu.setAttribute("role", "menu");
-	menu.hidden = true;
-
-	for (const def of TIERS) {
-		const item = document.createElement("button");
-		item.type = "button";
-		item.setAttribute("role", "menuitemradio");
-		item.setAttribute("data-tier", def.id);
-		/* Roving focus: the menu is opened by focusing one item, and
-		 * ArrowUp/Down/Home/End move between items. */
-		item.tabIndex = -1;
-		item.innerHTML = `<span class="dshwm-label">${t(def.key)}</span><span class="dshwm-value">${tierValueText(def.id)}</span>`;
-		item.addEventListener("click", (e) => {
-			e.stopPropagation();
-			/* Custom before the first drag has no width of its own: open the
-			 * right-edge guide instead of applying a value. */
-			if (def.id === "custom" && readNumber(CUSTOM_KEY) === null) {
-				beginCustomGuide();
-				hideMenu(true);
-				return;
-			}
-			endGuide(false);
-			applyTier(def.id);
-			hideMenu(true);
-		});
-		menu.appendChild(item);
-	}
-
-	/* Write only on change: syncMenu also runs on window resizes, and untouched
-	 * text should not churn the DOM (the plugin's own MutationObserver watches
-	 * childList). */
-	function setText(el: Element | null, text: string): void {
-		if (el !== null && el.textContent !== text) el.textContent = text;
-	}
-
-	function syncMenu(): void {
-		const tier = currentTier();
-		const items = menu.querySelectorAll<HTMLButtonElement>("button[data-tier]");
-		for (let i = 0; i < items.length; i++) {
-			const item = items[i];
-			const id = item.getAttribute("data-tier") ?? "";
-			const on = id === tier;
-			item.classList.toggle("selected", on);
-			item.setAttribute("aria-checked", String(on));
-			const labelEl = item.querySelector(".dshwm-label");
-			setText(labelEl, t(tierOf(id).key));
-			const valueEl = item.querySelector(".dshwm-value");
-			setText(valueEl, tierValueText(id));
-		}
-	}
-
-	function menuItems(): HTMLButtonElement[] {
-		return Array.from(menu.querySelectorAll<HTMLButtonElement>("button[data-tier]"));
-	}
-
-	function showMenu(): void {
-		menu.hidden = false;
-		btn.setAttribute("aria-expanded", "true");
-		syncMenu();
-		const items = menuItems();
-		const selected =
-			items.find((item) => item.getAttribute("data-tier") === currentTier()) ?? items[0];
-		if (selected && typeof selected.focus === "function") selected.focus();
-	}
-
-	/* restoreFocus is true for Escape / item selection, false for a click-away
-	 * so the click target keeps focus. */
-	function hideMenu(restoreFocus: boolean): void {
-		const hadFocus = menu.contains(document.activeElement);
-		menu.hidden = true;
-		btn.setAttribute("aria-expanded", "false");
-		if (restoreFocus && hadFocus && typeof btn.focus === "function") btn.focus();
-	}
-
-	btn.addEventListener("click", (e) => {
-		e.stopPropagation();
-		if (menu.hidden) showMenu();
-		else hideMenu(true);
-	});
-
-	const onDocClick = (e: MouseEvent): void => {
-		const target = e.target as Node | null;
-		if (!menu.hidden && e.target !== btn && !menu.contains(target)) hideMenu(false);
-		/* Clicking anywhere but the guide's handle cancels a pending custom
-		 * guide and restores the previous tier. */
-		if (
-			guideActive &&
-			!guideDragging &&
-			e.target !== btn &&
-			!menu.contains(target) &&
-			!isHandleEvent(e)
-		) {
-			endGuide(true);
-		}
-	};
-	const onDocKey = (e: KeyboardEvent): void => {
-		if (e.key === "Escape") {
-			if (!menu.hidden) hideMenu(true);
-			if (guideActive) endGuide(true);
-			return;
-		}
-		if (menu.hidden) return;
-		if (e.key === "Tab") {
-			/* Let Tab move on, but do not leave an orphaned menu. */
-			hideMenu(false);
-			return;
-		}
-		const items = menuItems();
-		if (items.length === 0) return;
-		const current = items.indexOf(document.activeElement as HTMLButtonElement);
-		let next = -1;
-		if (e.key === "ArrowDown") next = current < 0 ? 0 : (current + 1) % items.length;
-		else if (e.key === "ArrowUp") next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
-		else if (e.key === "Home") next = 0;
-		else if (e.key === "End") next = items.length - 1;
-		if (next < 0) return;
-		e.preventDefault();
-		const item = items[next];
-		if (typeof item.focus === "function") item.focus();
-	};
-	document.addEventListener("click", onDocClick);
-	document.addEventListener("keydown", onDocKey);
 
 	/* ---- custom-drag guide ----
 	 * A first-time `custom` pick has no recorded width. Instead of silently
@@ -406,66 +318,36 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	 * show the live transcript width while the user drags. The guide never
 	 * writes the width itself: the app's native drag does (and wins the
 	 * cascade), and the plugin only records the settled value on release. */
-	const guide = document.createElement("div");
-	guide.id = "dsh-width-guide";
-	guide.setAttribute("aria-hidden", "true");
-	guide.hidden = true;
-	guide.innerHTML =
-		'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
-		'<path d="M6 3 2 8l4 5M10 3l4 5-4 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-		'<span class="dshwg-text"></span>';
-	const guideTextEl = guide.querySelector(".dshwg-text");
-
-	let guideActive = false;
-	let guideDragging = false;
-	/* true while the bubble came from picking custom in the menu (its cancel
-	 * path restores the previous tier). Direct handle drags open the same
-	 * bubble but never "cancel" a tier. */
-	let guideFromMenu = false;
-	let guideHideTimer: number | null = null;
-	let guideHandle: Element | null = null;
-	let tierBeforeGuide: TierId = "standard";
-
-	/* The px the app currently resolves for the transcript, after its own
-	 * clamp — what the guide's live readout shows. */
-	function guideValueText(): string {
-		const root = roots.find();
-		const px = root === null ? null : liveWidthPx(root);
-		return px === null ? "—" : `${px}px`;
-	}
-
-	/* Keep the bubble beside the handle the user actually grabbed (it moves
-	 * with the dragged edge); fall back to the right handle / frame edge when
-	 * the handle is not mounted yet (menu-opened guide, hero or settling
-	 * phase). */
-	function positionGuide(): void {
-		if (!guideActive) return;
+	function computeGuideStyle(): PickerGuideStyle {
 		const handle =
 			guideHandle !== null && document.contains(guideHandle)
 				? guideHandle
 				: document.querySelector('[data-width-handle="right"]');
 		const viewport = window.innerWidth || 0;
 		if (handle === null || typeof handle.getBoundingClientRect !== "function" || viewport === 0) {
-			guide.style.left = "auto";
-			guide.style.right = "24px";
-			guide.style.top = "50%";
-			return;
+			return GUIDE_FALLBACK;
 		}
 		const rect = handle.getBoundingClientRect();
 		const gap = 10;
-		const width = guide.offsetWidth || 180;
-		guide.style.top = `${rect.top + rect.height / 2}px`;
-		guide.style.right = "auto";
-		if (viewport - rect.right >= width + gap) {
-			guide.style.left = `${rect.right + gap}px`;
-		} else {
-			guide.style.left = `${Math.max(8, rect.left - gap - width)}px`;
+		const top = `${rect.top + rect.height / 2}px`;
+		if (viewport - rect.right >= guideWidth + gap) {
+			return { left: `${rect.right + gap}px`, right: "auto", top };
 		}
+		return { left: `${Math.max(8, rect.left - gap - guideWidth)}px`, right: "auto", top };
 	}
 
-	function setGuideText(mode: "hint" | "live", text: string): void {
-		guide.dataset.mode = mode;
-		setText(guideTextEl, text);
+	function updateGuideStyle(): void {
+		if (!guideActive) return;
+		const next = computeGuideStyle();
+		if (
+			next.left === guideStyle.left &&
+			next.right === guideStyle.right &&
+			next.top === guideStyle.top
+		) {
+			return;
+		}
+		guideStyle = next;
+		emit();
 	}
 
 	function startGuide(): void {
@@ -473,24 +355,29 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		guideActive = true;
 		guideDragging = false;
 		guideHandle = null;
-		guide.hidden = false;
 		body().setAttribute(GUIDE_ATTR, "custom");
-		setGuideText("hint", t("guide.hint"));
-		positionGuide();
+		guideMode = "hint";
+		guideText = t("guide.hint");
+		guideStyle = computeGuideStyle();
+		emit();
 	}
 
 	/* Every handle press shows the live readout, not just the first guided
 	 * drag — a repeat custom drag must keep the handle highlight and the width
 	 * bubble. */
 	function startLiveGuide(handle: Element | null): void {
-		window.clearTimeout(guideHideTimer ?? undefined);
+		if (guideHideTimer !== null) {
+			window.clearTimeout(guideHideTimer);
+			guideHideTimer = null;
+		}
 		guideActive = true;
 		guideDragging = true;
 		guideHandle = handle ?? null;
-		guide.hidden = false;
 		body().setAttribute(GUIDE_ATTR, "custom");
-		setGuideText("live", guideValueText());
-		positionGuide();
+		guideMode = "live";
+		guideText = guideValueText();
+		guideStyle = computeGuideStyle();
+		emit();
 	}
 
 	function beginCustomGuide(): void {
@@ -508,9 +395,11 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	function finishGuide(): void {
 		if (!guideActive) return;
 		guideDragging = false;
-		setGuideText("live", guideValueText());
-		window.clearTimeout(guideHideTimer ?? undefined);
-		guideHideTimer = window.setTimeout(() => endGuide(false), 800);
+		guideMode = "live";
+		guideText = guideValueText();
+		if (guideHideTimer !== null) window.clearTimeout(guideHideTimer);
+		guideHideTimer = window.setTimeout(() => endGuide(false), GUIDE_HIDE_MS);
+		emit();
 	}
 
 	/* `restoreTier` is for cancelling a menu-opened guide (click-away /
@@ -520,20 +409,26 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		if (!guideActive) return;
 		guideActive = false;
 		guideDragging = false;
-		window.clearTimeout(guideHideTimer ?? undefined);
-		guide.hidden = true;
-		guide.dataset.mode = "hint";
+		if (guideHideTimer !== null) {
+			window.clearTimeout(guideHideTimer);
+			guideHideTimer = null;
+		}
+		guideMode = "hint";
 		guideHandle = null;
+		guideWidth = GUIDE_WIDTH_PX;
+		guideStyle = GUIDE_FALLBACK;
 		body().removeAttribute(GUIDE_ATTR);
 		const restore = restoreTier && guideFromMenu && readNumber(CUSTOM_KEY) === null;
 		guideFromMenu = false;
 		if (restore) applyTier(tierBeforeGuide);
+		else emit();
 	}
 
 	const onGuidePointerMove = (): void => {
 		if (!guideActive || !guideDragging) return;
-		setGuideText("live", guideValueText());
-		positionGuide();
+		guideText = guideValueText();
+		guideStyle = computeGuideStyle();
+		emit();
 	};
 	document.addEventListener("pointermove", onGuidePointerMove, true);
 
@@ -557,8 +452,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		} catch {
 			/* ignore */
 		}
-		syncButton();
-		syncMenu();
+		emit();
 	};
 
 	const onHandlePointerUp = (e: PointerEvent): void => {
@@ -577,8 +471,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			}
 		}
 		if (guideActive) finishGuide();
-		syncButton();
-		syncMenu();
+		else emit();
 	};
 
 	/* A cancelled drag (touch gesture, window switch) ends without pointerup;
@@ -589,39 +482,50 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		 * drag is active, end it regardless. */
 		if (!guideActive || !guideDragging) return;
 		endGuide(false);
-		syncButton();
-		syncMenu();
 	};
 	document.addEventListener("pointerdown", onHandlePointerDown, true);
 	document.addEventListener("pointerup", onHandlePointerUp, true);
 	document.addEventListener("pointercancel", onHandlePointerCancel, true);
 
-	/* ---- feedback ring so every selection is visibly answered ---- */
-	function pulse(): void {
-		btn.classList.remove("pulse");
-		void btn.offsetWidth;
-		btn.classList.add("pulse");
-		window.clearTimeout(pulseTimer ?? undefined);
-		pulseTimer = window.setTimeout(() => {
-			btn.classList.remove("pulse");
-			pulseTimer = null;
-		}, 700);
-	}
-
-	/* ---- re-render localized copy when the app language changes ---- */
-	const renderTexts = (): void => {
-		syncButton();
-		syncMenu();
-		if (guideActive && !guideDragging && guide.dataset.mode === "hint") {
-			setText(guideTextEl, t("guide.hint"));
-		}
+	/* ---- user actions (dispatched by the React picker) ---- */
+	const actions: PickerActions = {
+		toggleMenu(): void {
+			menuOpen = !menuOpen;
+			emit();
+		},
+		closeMenu(): void {
+			if (!menuOpen) return;
+			menuOpen = false;
+			emit();
+		},
+		selectTier(tier: TierId): void {
+			menuOpen = false;
+			/* Custom before the first drag has no width of its own: open the
+			 * right-edge guide instead of applying a value. */
+			if (tier === "custom" && readNumber(CUSTOM_KEY) === null) {
+				beginCustomGuide();
+				return;
+			}
+			endGuide(false);
+			applyTier(tier);
+		},
+		cancelGuide(): void {
+			endGuide(true);
+		},
+		measureGuide(width: number): void {
+			const next = Math.round(width);
+			if (next <= 0 || next === guideWidth) return;
+			guideWidth = next;
+			if (!guideActive) return;
+			guideStyle = computeGuideStyle();
+			emit();
+		},
 	};
-	const unsubscribeLocale = options.locale.subscribe(renderTexts);
 
 	/* ---- attach once the app shell has mounted ---- */
 	let attached = false;
-	let readyTimer: number | null = null;
-	let slowTimer: number | null = null;
+	let readyTimer: ReturnType<typeof setInterval> | null = null;
+	let slowTimer: ReturnType<typeof setInterval> | null = null;
 	let readyTimeout: number | null = null;
 
 	function stopWaiting(): void {
@@ -639,13 +543,9 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		}
 	}
 
-	/* The old gate matched [data-sidebar-collapsed] /
-	 * [data-details-collapsed]. 0.1.5-rc.2 renders collapsed markers
-	 * conditionally (`sidebarCollapsed || void 0`) and removed
-	 * data-details-collapsed, so with the sidebar expanded nothing ever
-	 * matched and the button never mounted. Wait for the AppFrame overlay layer
-	 * instead — `data-shell-overlay` is rendered unconditionally once the
-	 * shell exists. */
+	/* Wait for the AppFrame overlay layer (rendered unconditionally once the
+	 * shell exists) before restoring the saved tier and starting self-heal.
+	 * The picker itself is rendered by the slot system, not created here. */
 	function attach(): void {
 		if (attached || !body()) return;
 		if (document.querySelector("[data-shell-overlay]") === null) return;
@@ -656,12 +556,9 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		} catch {
 			/* ignore */
 		}
-		mount.appendChild(btn);
-		mount.appendChild(menu);
-		mount.appendChild(guide);
-		syncButton();
 		const saved = getSavedTier();
 		if (saved !== "standard") applyTier(saved);
+		else emit();
 		startHealing();
 		const cached = roots.cached();
 		if (cached !== null) observeWidthTarget(cached);
@@ -674,8 +571,8 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			clearInterval(readyTimer);
 			readyTimer = null;
 		}
-		/* A very slow boot should not leave the picker permanently unmounted:
-		 * keep a low-frequency retry instead of giving up. */
+		/* A very slow boot should not leave self-heal unmounted: keep a
+		 * low-frequency retry instead of giving up. */
 		slowTimer = setInterval(attach, 2000);
 	}, READY_TIMEOUT_MS);
 	window.addEventListener("load", attach);
@@ -684,9 +581,6 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	 * localStorage again (that would loop). */
 	const onStorage = (e: StorageEvent): void => {
 		if (!e || e.key !== KEY) return;
-		/* No storageArea identity check: spec does not require the event object
-		 * to be the same Storage instance as window.localStorage, and dropping
-		 * the event would break cross-tab sync. */
 		const next = e.newValue;
 		if (typeof next !== "string") return;
 		const found = TIERS.find((tier) => tier.id === next);
@@ -713,13 +607,12 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	let healFrame: number | null = null;
 	let resizeFrame: number | null = null;
 	let observer: MutationObserver | null = null;
-	let fallbackTimer: number | null = null;
+	let fallbackTimer: ReturnType<typeof setInterval> | null = null;
 	let widthObserver: ResizeObserver | null = null;
 	let observedTarget: HTMLElement | null = null;
 
 	/* Return the frame id so heal and resize can be debounced and cancelled
-	 * independently. The old helper always wrote the heal slot, so resizeFrame
-	 * never became non-null and every resize event scheduled another frame. */
+	 * independently. */
 	function scheduleFrame(cb: () => void): number {
 		return typeof requestAnimationFrame === "function"
 			? requestAnimationFrame(cb)
@@ -750,8 +643,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			const tier = currentTier();
 			if (tier === "standard") return;
 			applyContentWidth(tier);
-			syncButton();
-			syncMenu();
+			emit();
 		});
 		widthObserver.observe(target);
 	}
@@ -772,8 +664,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 				rootRetryDelay = ROOT_RETRY_MIN_MS;
 				if (root !== prev) {
 					applyContentWidth(tier);
-					syncButton();
-					syncMenu();
+					emit();
 				}
 				observeWidthTarget(root);
 			}
@@ -783,7 +674,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	function heal(fromObserver: boolean): void {
 		/* The right handle only mounts in the active phase; keep the guide
 		 * pinned to it once the chat tree settles. */
-		if (guideActive) positionGuide();
+		if (guideActive) updateGuideStyle();
 		/* The app's native drag owns the inline width until release; a heal
 		 * must not restore the previous custom value on top. */
 		if (guideActive && guideDragging) return;
@@ -816,12 +707,12 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		observeWidthTarget(root);
 		if (root !== prev) {
 			applyContentWidth(tier);
-			syncButton();
-			syncMenu();
+			emit();
 		} else if (!fromObserver) {
 			/* Fallback tick: retry an apply that was skipped while the root had
 			 * no layout box. */
 			applyContentWidth(tier);
+			emit();
 		}
 	}
 
@@ -857,19 +748,36 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 				const tier = currentTier();
 				if (tier !== "standard") applyContentWidth(tier);
 			}
-			syncButton();
-			syncMenu();
-			positionGuide();
+			if (guideActive) guideStyle = computeGuideStyle();
+			emit();
 		});
 	};
 	window.addEventListener("resize", onWindowResize);
 
-	/* All healing/observer state is initialized by now; try an immediate mount
-	 * instead of waiting for the first interval. */
+	/* ---- publish the initial state and wake on language changes ---- */
+	snapshot = buildSnapshot();
+	const unsubscribeLocale = options.locale.subscribe(() => {
+		if (guideActive && !guideDragging && guideMode === "hint") guideText = t("guide.hint");
+		emit();
+	});
+
+	/* All state is initialized by now; try an immediate attach instead of
+	 * waiting for the first interval. */
 	attach();
 
-	/* ---- disposer ---- */
+	const source: PickerSource = {
+		getSnapshot: () => snapshot,
+		subscribe(listener: () => void): () => void {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+	};
+
 	return {
+		source,
+		actions,
 		dispose(): void {
 			unsubscribeLocale();
 			stopWaiting();
@@ -884,10 +792,6 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			if (guideHideTimer !== null) {
 				window.clearTimeout(guideHideTimer);
 				guideHideTimer = null;
-			}
-			if (pulseTimer !== null) {
-				window.clearTimeout(pulseTimer);
-				pulseTimer = null;
 			}
 			if (healFrame !== null) {
 				cancelFrame(healFrame);
@@ -906,15 +810,10 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			window.removeEventListener("load", attach);
 			window.removeEventListener("storage", onStorage);
 			if (observer !== null) observer.disconnect();
-			document.removeEventListener("click", onDocClick);
-			document.removeEventListener("keydown", onDocKey);
 			document.removeEventListener("pointerdown", onHandlePointerDown, true);
 			document.removeEventListener("pointerup", onHandlePointerUp, true);
 			document.removeEventListener("pointercancel", onHandlePointerCancel, true);
 			document.removeEventListener("pointermove", onGuidePointerMove, true);
-			if (btn.parentNode) btn.parentNode.removeChild(btn);
-			if (menu.parentNode) menu.parentNode.removeChild(menu);
-			if (guide.parentNode) guide.parentNode.removeChild(guide);
 			removeStyles();
 			/* Hand the width back to the app default. Only a value this plugin
 			 * wrote is removed, so a native drag preference that predates the
@@ -952,6 +851,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			guideHandle = null;
 			body().removeAttribute(TIER_ATTR);
 			body().removeAttribute(GUIDE_ATTR);
+			listeners.clear();
 		},
 	};
 }

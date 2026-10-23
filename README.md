@@ -64,8 +64,11 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 
 ## How it works
 
-- Mounts the picker into the frame-wide `shell.overlay` slot; the slot entry
-  owns the controller lifetime, so no nodes, listeners or timers outlive it.
+- Mounts the picker into the frame-wide `shell.overlay` slot; the plugin fiber
+  owns the controller lifetime, so no listeners or timers outlive it.
+- The controller publishes an immutable snapshot (tier, menu, guide); the React
+  picker renders it and dispatches actions, so the view can remount without
+  rebuilding observers.
 - Locates the conversation body that declares `--dsh-chat-content-width`
   (prefers `[data-conversation-content]`, skips the right sidebar's embedded
   conversation), then writes `--dsh-chat-user-width` on its parent.
@@ -87,14 +90,16 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 pnpm install
 pnpm build        # src/ -> lib/ (host entry + loader-wrapped client bundle)
 pnpm typecheck
-pnpm test         # DOM-stub regression against lib/client.js
+pnpm test         # vitest: controller (jsdom) + picker component suites
 pnpm verify:client
 ```
 
 The sources live in `src/` (`src/index.ts` is the no-op host entry, the
 feature lives in `src/client/`); `lib/` is the built, published payload. The
-test loads the built `lib/client.js` through a DOM stub, so no live DSH
-instance is required. Development needs Node 22+ and pnpm.
+vitest suites import the sources directly: the controller runs under jsdom and
+the picker is rendered with Testing Library, so no live DSH instance is
+required. `verify:client` checks the built bundle contract. Development needs
+Node 22+ and pnpm.
 
 ## Notes
 

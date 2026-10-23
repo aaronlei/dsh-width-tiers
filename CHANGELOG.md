@@ -4,20 +4,21 @@
 
 ### Changed
 
-- **The picker is now a `shell.overlay` slot entry.** It no longer appends
-  nodes to `document.body`; a small React host receives the controller through
-  the slot inject face and disposes it on unmount, so HMR and plugin unload
-  leave no nodes, listeners or timers behind. `dsh.client` now lists
-  `@deepseek-ai/dsh-client-ui-slots`.
+- **The picker is now a React component in `shell.overlay`.** The plugin
+  fiber owns the width controller (observers, storage, native-handle
+  interception) and publishes an immutable snapshot; `WidthTierPicker` renders
+  the button, menu and drag guide from it. No nodes are appended to
+  `document.body`, and menu focus, keyboard handling and click-away stay in the
+  view. `dsh.client` lists `@deepseek-ai/dsh-client-ui-slots`.
 - **Minimum supported DSH Web is now 0.2.x** (the slot system with the
   frame-wide `shell.overlay` seat and the `slots` service).
 - **Source tree and build pipeline.** The client is now maintained as
   TypeScript under `src/client/**` and built with tsdown into the same
   loader-wrapped `lib/client.js`; the host entry is built from `src/index.ts`.
-  Runtime behavior is unchanged.
-- The legacy DOM-stub suite accepts `DSH_WIDTH_TIERS_CLIENT` so a temporary
-  build can be verified before `lib/` is replaced, and now drives the slot
-  inject face directly instead of `apply` creating the UI.
+- **Tests moved to vitest.** The controller runs under jsdom (tier restore,
+  width preference ownership, sidebar ownership, native drag capture, storage
+  sync, resize follow, dispose) and the picker is covered with Testing Library
+  (menu open/focus, selection, Escape, arrow keys, guide rendering, ARIA state).
 - Added `pnpm build`, `pnpm typecheck`, and `pnpm verify:client`; `prepack`
   rebuilds the published artifacts.
 

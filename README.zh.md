@@ -58,8 +58,10 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 
 ## 原理
 
-- 挂载到 frame 级 `shell.overlay` 插槽，由插槽条目持有 controller 生命周期；
-  插件卸载后不残留节点、监听器或定时器。
+- 挂载到 frame 级 `shell.overlay` 插槽，由插件 fiber 持有 controller 生命周期；
+  插件卸载后不残留监听器或定时器。
+- controller 发布不可变快照（档位、菜单、引导），React picker 只负责渲染并
+  派发动作；视图重挂载不需要重建观察者。
 - 定位声明 `--dsh-chat-content-width` 的对话 body（优先
   `[data-conversation-content]`，跳过右侧栏的 embedded 对话），在它的
   父级写入 `--dsh-chat-user-width`。
@@ -79,13 +81,14 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 pnpm install
 pnpm build        # src/ -> lib/（宿主入口 + loader 包装的客户端 bundle）
 pnpm typecheck
-pnpm test         # DOM stub 回归，加载 lib/client.js
+pnpm test         # vitest：controller（jsdom）+ picker 组件测试
 pnpm verify:client
 ```
 
 源码在 `src/`（`src/index.ts` 是无副作用的宿主入口，功能在
-`src/client/`），`lib/` 是构建后的发布内容。测试通过 DOM stub 加载构建后的
-`lib/client.js`，不需要启动真实 DSH。开发需要 Node 22+ 与 pnpm。
+`src/client/`），`lib/` 是构建后的发布内容。vitest 直接测试源码：
+controller 跑在 jsdom 下，picker 用 Testing Library 渲染，不需要启动真实
+DSH。`verify:client` 校验构建产物的 loader 契约。开发需要 Node 22+ 与 pnpm。
 
 ## 注意
 

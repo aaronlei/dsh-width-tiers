@@ -1,6 +1,7 @@
 import { createWidthTiers } from "./controller.ts";
 import { en, NS, zh, type TFunction } from "./locales.ts";
-import { OverlayHost, type OverlayHostInjected } from "./OverlayHost.tsx";
+import type { PickerActions, PickerSource } from "./picker-state.ts";
+import { WidthTierPicker } from "./WidthTierPicker.tsx";
 
 /** Locale service slice the plugin entry needs. */
 interface LocaleService {
@@ -17,19 +18,25 @@ interface LayoutService {
 	toggleSidebar(): void;
 }
 
-/** One `shell.overlay` registration; the renderer turns the inject face into props. */
+/** Values the renderer turns into the picker's props. */
+interface OverlayInjected {
+	hooks: { picker: PickerSource };
+	actions: PickerActions;
+}
+
+/** One `shell.overlay` registration; the renderer derives component props. */
 interface OverlayRegistration {
 	name: string;
 	id: string;
 	order?: number;
 	locale?: string;
-	inject?: () => OverlayHostInjected;
+	inject?: () => OverlayInjected;
 }
 
 /** Slot service slice the plugin entry needs. */
 interface SlotsService {
 	inject(name: string, callback: () => unknown): void;
-	register(options: OverlayRegistration, component: typeof OverlayHost): () => void;
+	register(options: OverlayRegistration, component: typeof WidthTierPicker): () => void;
 }
 
 /** Cordis client context surface used by this plugin. */
@@ -44,10 +51,10 @@ interface ClientContext {
 export const inject = ["slots", "layout", "locale"];
 
 /**
- * Client plugin body: register the dictionaries, then contribute the picker
- * to the frame-wide overlay layer. The controller lives as long as the slot
- * entry: the host component's effect calls `mount` on render and disposes it
- * on unmount, so no nodes, listeners or timers outlive the registration.
+ * Client plugin body: register the dictionaries, start the width-tier
+ * controller, then contribute the React picker to the frame-wide overlay
+ * layer. The controller owns the width axis and persistence; the slot entry
+ * owns only its own render lifetime.
  * @param ctx - client root context (slots + layout + locale injected).
  */
 export function apply(ctx: ClientContext): void {
@@ -56,6 +63,15 @@ export function apply(ctx: ClientContext): void {
 		"dsh-width-tiers: dictionaries",
 	);
 	const t = ctx.locale.bind(NS) as TFunction;
+	const controller = createWidthTiers({
+		layout: ctx.layout,
+		locale: ctx.locale,
+		t,
+	});
+	ctx.effect(
+		() => () => controller.dispose(),
+		"dsh-width-tiers: controller",
+	);
 
 	ctx.slots.inject("shell.overlay", () =>
 		ctx.slots.register(
@@ -64,19 +80,12 @@ export function apply(ctx: ClientContext): void {
 				id: "width-tiers",
 				order: 100,
 				locale: NS,
-				inject: (): OverlayHostInjected => ({
-					mount(container: HTMLElement): () => void {
-						const controller = createWidthTiers({
-							mount: container,
-							layout: ctx.layout,
-							locale: ctx.locale,
-							t,
-						});
-						return () => controller.dispose();
-					},
+				inject: (): OverlayInjected => ({
+					hooks: { picker: controller.source },
+					actions: controller.actions,
 				}),
 			},
-			OverlayHost,
+			WidthTierPicker,
 		),
 	);
 }

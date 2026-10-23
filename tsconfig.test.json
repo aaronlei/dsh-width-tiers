@@ -1,0 +1,14 @@
+{
+	"extends": "./tsconfig.client.json",
+	"compilerOptions": {
+		"types": ["react"],
+		"jsx": "react-jsx"
+	},
+	"include": [
+		"src/client/**/*.ts",
+		"src/client/**/*.tsx",
+		"test/**/*.ts",
+		"test/**/*.tsx",
+		"vitest.config.ts"
+	]
+}

@@ -43,6 +43,9 @@ const reactStub = {
 	useRef() {
 		return { current: null };
 	},
+	useState(initial) {
+		return [initial, () => {}];
+	},
 };
 const jsxRuntimeStub = {
 	jsx() {
