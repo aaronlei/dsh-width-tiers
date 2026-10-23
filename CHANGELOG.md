@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **DSH keyboard shortcuts work again while the plugin is loaded.** The tier
+  menu stayed in the document as a hidden `role="menu"` element. DSH's
+  shortcut service treats any `[role="menu"]` as an open modal without
+  checking visibility, so every shortcut was blocked — including the double
+  Escape that stops a response and the settings shortcut. The menu now carries
+  `role="menu"` only while it is open.
+
 ## [1.0.9] - 2026-10-22
 
 ### Fixed

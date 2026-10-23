@@ -70,6 +70,7 @@ function makeEl(tag) {
     },
     setAttribute(name, value) { this.attrs.set(name, String(value)); },
     getAttribute(name) { return this.attrs.has(name) ? this.attrs.get(name) : null; },
+    removeAttribute(name) { this.attrs.delete(name); },
     set innerHTML(html) {
       this._html = String(html);
       this.children = [];
@@ -339,6 +340,9 @@ const userWidth = () => shellB.style["--dsh-chat-user-width"];
 /* 1. saved tier restored once the app shell mounts (details closed by default) */
 setTimeout(() => {
   assert(!!btn() && !!menu(), "button and menu appended after mount");
+  /* DSH's shortcut service treats any [role="menu"] as an open modal, even
+   * when hidden; a closed menu must not carry the role. */
+  assert(menu().getAttribute("role") === null, "closed menu has no role (does not block DSH shortcuts)");
   assert(fakeBody.getAttribute("data-dsh-width") === "wide", "saved tier restored");
   assert(userWidth() === "1280px", "user-width set on the app's publish target");
   assert(storage["dsh.conversation.contentWidth"] === "1280", "app preference mirrored");
@@ -370,6 +374,7 @@ setTimeout(() => {
   /* 2. menu: pick full → sidebar collapsed via layout service, column max */
   btn().click();
   assert(menu().hidden === false, "menu opens");
+  assert(menu().getAttribute("role") === "menu", "open menu exposes role=menu");
   menuItem("full").click();
   assert(fakeBody.getAttribute("data-dsh-width") === "full", "full selected");
   assert(sidebarCollapsed === true, "full collapses the sidebar");
@@ -721,6 +726,7 @@ setTimeout(() => {
             );
             (docListeners.keydown || []).forEach((fn) => fn({ key: "Escape" }));
             assert(menu().hidden === true, "Escape closes the menu");
+            assert(menu().getAttribute("role") === null, "closing the menu drops role=menu");
             assert(document.activeElement === btn(), "Escape returns focus to the button");
 
             /* 9g. one bar per tier distinguishes full from custom. */
