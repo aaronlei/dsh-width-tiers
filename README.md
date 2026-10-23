@@ -6,7 +6,7 @@
   <a href="https://www.npmjs.com/package/dsh-width-tiers"><img alt="npm" src="https://img.shields.io/npm/v/dsh-width-tiers?style=flat-square"></a>
   <a href="https://github.com/aaronlei/dsh-width-tiers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/aaronlei/dsh-width-tiers?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square"></a>
-  <a href="#compatibility"><img alt="DSH 0.1.7+" src="https://img.shields.io/badge/DSH-0.1.7%2B-blue?style=flat-square"></a>
+  <a href="#compatibility"><img alt="DSH 0.2.x" src="https://img.shields.io/badge/DSH-0.2.x-blue?style=flat-square"></a>
 </p>
 
 ## Tiers
@@ -64,6 +64,8 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 
 ## How it works
 
+- Mounts the picker into the frame-wide `shell.overlay` slot; the slot entry
+  owns the controller lifetime, so no nodes, listeners or timers outlive it.
 - Locates the conversation body that declares `--dsh-chat-content-width`
   (prefers `[data-conversation-content]`, skips the right sidebar's embedded
   conversation), then writes `--dsh-chat-user-width` on its parent.
@@ -75,19 +77,24 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 
 ## Compatibility
 
-- DSH Web 0.1.7+ with a `web` profile.
+- DSH Web 0.2.x with a `web` profile (`shell.overlay` slot and `slots` service).
 - Width axis checked against DSH 0.2.1-rc.2: 640px floor, 176px handle budget,
   `--dsh-chat-*` variables, `data-width-handle`, layout/locale services.
 
 ## Development
 
 ```bash
-npm test
+pnpm install
+pnpm build        # src/ -> lib/ (host entry + loader-wrapped client bundle)
+pnpm typecheck
+pnpm test         # DOM-stub regression against lib/client.js
+pnpm verify:client
 ```
 
-The test loads the shipped `lib/client.js` bundle through a DOM stub; no live
-DSH instance is required. The package ships prebuilt `lib/` and does not
-include a `src/` tree.
+The sources live in `src/` (`src/index.ts` is the no-op host entry, the
+feature lives in `src/client/`); `lib/` is the built, published payload. The
+test loads the built `lib/client.js` through a DOM stub, so no live DSH
+instance is required. Development needs Node 22+ and pnpm.
 
 ## Notes
 

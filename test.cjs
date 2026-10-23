@@ -1,9 +1,9 @@
 /*
- * DOM-stub regression test for the dsh-width-tiers client bundle.
- * Loads lib/client.js through a fake __ModuleLoader__, calls apply(ctx) with
- * fake layout/locale services, and validates: tier restore, the app width
- * preference semantics (nominal target vs clamped inline, native preference
- * preservation), zero-layout
+ * DOM-stub regression test for the dsh-width-tiers client bundle. Loads the
+ * built client bundle (lib/client.js, or DSH_WIDTH_TIERS_CLIENT) through a
+ * fake __ModuleLoader__, calls apply(ctx) with fake layout/locale services,
+ * and validates: tier restore, the app width preference semantics (nominal
+ * target vs clamped inline, native preference preservation), zero-layout
  * handling, sidebar ownership, custom-guide lifecycle (including
  * pointercancel), locale dictionaries, keyboard menu navigation, storage
  * synchronization, resize-frame deduplication, and the effect disposer.
@@ -283,9 +283,26 @@ global.window.__ModuleLoader__ = {
     loaded = entry;
   },
 };
-const src = fs.readFileSync(path.join(__dirname, "lib", "client.js"), "utf8");
+const clientPath = process.env.DSH_WIDTH_TIERS_CLIENT
+  || path.join(__dirname, "lib", "client.js");
+const src = fs.readFileSync(clientPath, "utf8");
 eval(src); // eslint-disable-line no-eval
-const mod = loaded.factory(() => ({})); // no requires in this bundle
+/* The client bundle externalizes React; the component is not rendered here —
+ * the inject face is driven directly — so inert stubs are enough. */
+const reactStub = {
+  useEffect() {},
+  useLayoutEffect() {},
+  useRef() { return { current: null }; },
+};
+const jsxRuntimeStub = {
+  jsx() { return null; },
+  jsxs() { return null; },
+};
+const mod = loaded.factory((specifier) => {
+  if (specifier === "react") return reactStub;
+  if (specifier === "react/jsx-runtime") return jsxRuntimeStub;
+  throw new Error(`unexpected require: ${specifier}`);
+});
 
 function assert(cond, msg) {
   if (!cond) {
@@ -297,9 +314,20 @@ function assert(cond, msg) {
 
 /* ---- drive the plugin ---- */
 const disposers = [];
+let overlayEntry = null;
 const ctx = {
   layout: layoutService,
   locale: localeService,
+  slots: {
+    inject(name, callback) {
+      if (name !== "shell.overlay") throw new Error(`unexpected slot: ${name}`);
+      callback();
+    },
+    register(options, component) {
+      overlayEntry = { options, component };
+      return () => { overlayEntry = null; };
+    },
+  },
   effect(fn) {
     const d = fn();
     if (typeof d === "function") disposers.push(d);
@@ -307,6 +335,13 @@ const ctx = {
   },
 };
 mod.apply(ctx);
+assert(
+  overlayEntry !== null && overlayEntry.options.name === "shell.overlay",
+  "client registers into shell.overlay",
+);
+const overlayFace = overlayEntry.options.inject();
+const disposeUi = overlayFace.mount(fakeBody);
+disposers.push(disposeUi);
 const disposeAll = () => {
   while (disposers.length > 0) {
     const d = disposers.pop();
@@ -314,8 +349,8 @@ const disposeAll = () => {
   }
 };
 assert(
-  JSON.stringify(mod.inject) === JSON.stringify(["layout", "locale"]),
-  "bundle injects the layout + locale services",
+  JSON.stringify(mod.inject) === JSON.stringify(["slots", "layout", "locale"]),
+  "bundle injects the slots + layout + locale services",
 );
 const pluginLocales = registeredLocales.get("width-tiers");
 assert(

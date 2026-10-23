@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **The picker is now a `shell.overlay` slot entry.** It no longer appends
+  nodes to `document.body`; a small React host receives the controller through
+  the slot inject face and disposes it on unmount, so HMR and plugin unload
+  leave no nodes, listeners or timers behind. `dsh.client` now lists
+  `@deepseek-ai/dsh-client-ui-slots`.
+- **Minimum supported DSH Web is now 0.2.x** (the slot system with the
+  frame-wide `shell.overlay` seat and the `slots` service).
+- **Source tree and build pipeline.** The client is now maintained as
+  TypeScript under `src/client/**` and built with tsdown into the same
+  loader-wrapped `lib/client.js`; the host entry is built from `src/index.ts`.
+  Runtime behavior is unchanged.
+- The legacy DOM-stub suite accepts `DSH_WIDTH_TIERS_CLIENT` so a temporary
+  build can be verified before `lib/` is replaced, and now drives the slot
+  inject face directly instead of `apply` creating the UI.
+- Added `pnpm build`, `pnpm typecheck`, and `pnpm verify:client`; `prepack`
+  rebuilds the published artifacts.
+
 ## [1.0.9] - 2026-10-22
 
 ### Fixed

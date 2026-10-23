@@ -6,7 +6,7 @@
   <a href="https://www.npmjs.com/package/dsh-width-tiers"><img alt="npm" src="https://img.shields.io/npm/v/dsh-width-tiers?style=flat-square"></a>
   <a href="https://github.com/aaronlei/dsh-width-tiers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/aaronlei/dsh-width-tiers?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square"></a>
-  <a href="#兼容性"><img alt="DSH 0.1.7+" src="https://img.shields.io/badge/DSH-0.1.7%2B-blue?style=flat-square"></a>
+  <a href="#兼容性"><img alt="DSH 0.2.x" src="https://img.shields.io/badge/DSH-0.2.x-blue?style=flat-square"></a>
 </p>
 
 ## 档位
@@ -58,6 +58,8 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 
 ## 原理
 
+- 挂载到 frame 级 `shell.overlay` 插槽，由插槽条目持有 controller 生命周期；
+  插件卸载后不残留节点、监听器或定时器。
 - 定位声明 `--dsh-chat-content-width` 的对话 body（优先
   `[data-conversation-content]`，跳过右侧栏的 embedded 对话），在它的
   父级写入 `--dsh-chat-user-width`。
@@ -67,18 +69,23 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 
 ## 兼容性
 
-- DSH Web 0.1.7+，带 `web` profile。
+- DSH Web 0.2.x，带 `web` profile（`shell.overlay` 插槽与 `slots` 服务）。
 - 宽度轴已按 DSH 0.2.1-rc.2 对照：640px 下限、176px 手柄预留、
   `--dsh-chat-*` 变量、`data-width-handle`、layout/locale 服务。
 
 ## 开发
 
 ```bash
-npm test
+pnpm install
+pnpm build        # src/ -> lib/（宿主入口 + loader 包装的客户端 bundle）
+pnpm typecheck
+pnpm test         # DOM stub 回归，加载 lib/client.js
+pnpm verify:client
 ```
 
-测试通过 DOM stub 加载已发布的 `lib/client.js`，不需要启动真实 DSH。包内
-直接发布预构建的 `lib/`，不包含 `src/`。
+源码在 `src/`（`src/index.ts` 是无副作用的宿主入口，功能在
+`src/client/`），`lib/` 是构建后的发布内容。测试通过 DOM stub 加载构建后的
+`lib/client.js`，不需要启动真实 DSH。开发需要 Node 22+ 与 pnpm。
 
 ## 注意
 
