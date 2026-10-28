@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **All eight languages DSH 0.2.2 ships.** The dictionaries now cover
+  日本語, Español, Français, Deutsch, Русский and Português (`pt`, including
+  `pt-PT` browser requests) alongside 中文 and English. Each locale registers
+  through the service's per-language `register(ns, locale, dict)` form, and
+  languages without a dictionary still fall back to English.
+
+### Verified
+
+- **No runtime change required for DSH 0.2.2.** Its width axis still
+  publishes `--dsh-chat-user-width` on the parent of
+  `[data-conversation-content]`, keeps the `dsh.conversation.contentWidth`
+  preference, the 640/176px clamp and the `[data-width-handle]` drag handles,
+  and still renders `[data-shell-overlay]`, `[data-sidebar-collapsed]` and
+  `layout.toggleSidebar`, so the picker, the drag guide and the `full` tier's
+  sidebar collapse keep working unchanged.
+
 ## [2.0.0] - 2026-10-23
 
 ### Changed

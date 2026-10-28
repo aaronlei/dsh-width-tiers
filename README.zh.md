@@ -33,7 +33,7 @@
 - 走应用原生宽度通道（`--dsh-chat-user-width` 与
   `dsh.conversation.contentWidth`），自带拖拽手柄始终可用。
 - 记住当前档位，下次打开自动恢复。
-- 跟随 **设置 → 语言**（中文 / English）。
+- 跟随 **设置 → 语言**（中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português）。
 - 菜单支持方向键、Home/End、Esc、Tab，并恢复焦点。
 - 档位选择跨标签页同步。
 - 支持 `prefers-reduced-motion`。

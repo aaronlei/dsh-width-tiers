@@ -1,14 +1,11 @@
 import { createWidthTiers } from "./controller.ts";
-import { en, NS, zh, type TFunction } from "./locales.ts";
+import { dictionaries, NS, type TFunction } from "./locales.ts";
 import type { PickerActions, PickerSource } from "./picker-state.ts";
 import { WidthTierPicker } from "./WidthTierPicker.tsx";
 
 /** Locale service slice the plugin entry needs. */
 interface LocaleService {
-	register(
-		namespace: string,
-		dictionaries: { zh: Record<string, string>; en: Record<string, string> },
-	): () => void;
+	register(namespace: string, locale: string, dictionary: Record<string, string>): () => void;
 	bind(namespace: string): (key: string, values?: Record<string, string>) => string;
 	subscribe(listener: () => void): () => void;
 }
@@ -58,10 +55,14 @@ export const inject = ["slots", "layout", "locale"];
  * @param ctx - client root context (slots + layout + locale injected).
  */
 export function apply(ctx: ClientContext): void {
-	ctx.effect(
-		() => ctx.locale.register(NS, { zh, en }),
-		"dsh-width-tiers: dictionaries",
-	);
+	ctx.effect(() => {
+		const disposers = Object.entries(dictionaries).map(([locale, dictionary]) =>
+			ctx.locale.register(NS, locale, dictionary),
+		);
+		return () => {
+			for (const dispose of disposers) dispose();
+		};
+	}, "dsh-width-tiers: dictionaries");
 	const t = ctx.locale.bind(NS) as TFunction;
 	const controller = createWidthTiers({
 		layout: ctx.layout,

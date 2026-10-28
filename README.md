@@ -35,7 +35,7 @@ Fixed and custom widths are clamped by the app to
 - Uses the app's native width axis (`--dsh-chat-user-width` and
   `dsh.conversation.contentWidth`), so the built-in drag handles keep working.
 - Persists the selected tier and restores it on the next visit.
-- Follows **Settings → Language** (中文 / English).
+- Follows **Settings → Language** (中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português).
 - Menu supports ArrowUp/Down, Home/End, Escape and Tab, with focus restoration.
 - Tier changes sync across tabs.
 - Respects `prefers-reduced-motion`.
