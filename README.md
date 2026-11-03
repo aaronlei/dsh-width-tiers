@@ -28,14 +28,15 @@
 Fixed and custom widths are clamped by the app to
 `max(640px, column − 176px)`; the standard tier follows the app default
 (680–920px). On a narrow window a wider fixed tier therefore behaves like
-`full`.
+`full`, and the menu shows the reachable maximum for fixed tiers (1280px
+reads 640px on an 800px column).
 
 ## Features
 
 - Uses the app's native width axis (`--dsh-chat-user-width` and
   `dsh.conversation.contentWidth`), so the built-in drag handles keep working.
 - Persists the selected tier and restores it on the next visit.
-- Follows **Settings → Language** (中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português).
+- Follows **Settings → Language** (中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português), including the Settings plugin card's title and summary (`locale/<lang>.json`).
 - Menu supports ArrowUp/Down, Home/End, Escape and Tab, with focus restoration.
 - Tier changes sync across tabs.
 - Respects `prefers-reduced-motion`.
@@ -86,8 +87,10 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 ## Compatibility
 
 - DSH Web 0.2.x with a `web` profile (`shell.overlay` slot and `slots` service).
-- Width axis checked against DSH 0.2.1-rc.2: 640px floor, 176px handle budget,
-  `--dsh-chat-*` variables, `data-width-handle`, layout/locale services.
+- Width axis checked against DSH 0.2.2-alpha.3: 640px floor, 176px handle
+  budget, `--dsh-chat-*` variables, `data-width-handle`, layout/locale services.
+- Narrow screens: the picker hides while alpha.3's sidebar drawer
+  (`data-sidebar-drawer`) is open and follows the on-screen keyboard.
 
 ## Development
 

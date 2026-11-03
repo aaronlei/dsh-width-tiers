@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Paliers de largeur (dsh-width-tiers)",
+    "description": "Paliers de largeur du contenu du chat (standard / moyen / large / très large / pleine largeur / personnalisé) avec un sélecteur flottant ; s'appuie sur l'axe de largeur natif de l'application, donc les poignées de redimensionnement intégrées restent utilisables."
+  }
+}

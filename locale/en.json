@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Width tiers (dsh-width-tiers)",
+    "description": "Chat content width tiers (standard / medium / wide / ultra / full / custom) with a floating picker; drives the app's native width axis so the built-in drag handles keep working."
+  }
+}

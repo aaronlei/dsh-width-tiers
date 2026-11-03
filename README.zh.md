@@ -26,14 +26,16 @@
 | 自定义 | 原生拖拽记录的宽度 | 不动 |
 
 固定档和自定义宽度会被应用钳制到 `max(640px, 列宽 − 176px)`；标准档
-使用应用默认的 680–920px。窄窗口下较宽的固定档等同「全宽」。
+使用应用默认的 680–920px。窄窗口下较宽的固定档等同「全宽」，菜单中的
+固定档数值也按可达上限显示（例如 800px 列宽下「宽」显示 640px）。
 
 ## 特性
 
 - 走应用原生宽度通道（`--dsh-chat-user-width` 与
   `dsh.conversation.contentWidth`），自带拖拽手柄始终可用。
 - 记住当前档位，下次打开自动恢复。
-- 跟随 **设置 → 语言**（中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português）。
+- 跟随 **设置 → 语言**（中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português），
+  包括设置页插件卡片的标题与简介（`locale/<lang>.json`）。
 - 菜单支持方向键、Home/End、Esc、Tab，并恢复焦点。
 - 档位选择跨标签页同步。
 - 支持 `prefers-reduced-motion`。
@@ -77,8 +79,10 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 ## 兼容性
 
 - DSH Web 0.2.x，带 `web` profile（`shell.overlay` 插槽与 `slots` 服务）。
-- 宽度轴已按 DSH 0.2.1-rc.2 对照：640px 下限、176px 手柄预留、
+- 宽度轴已按 DSH 0.2.2-alpha.3 对照：640px 下限、176px 手柄预留、
   `--dsh-chat-*` 变量、`data-width-handle`、layout/locale 服务。
+- 窄屏适配 alpha.3 的侧栏抽屉（`data-sidebar-drawer`）：抽屉打开时隐藏
+  选择器；软键盘弹出时按钮与菜单随之上移。
 
 ## 开发
 

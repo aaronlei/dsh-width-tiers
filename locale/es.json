@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Niveles de ancho (dsh-width-tiers)",
+    "description": "Niveles de ancho del contenido del chat (estándar / medio / ancho / muy ancho / completo / personalizado) con un selector flotante; usa el eje de ancho nativo de la app, así que los tiradores de arrastre integrados siguen funcionando."
+  }
+}

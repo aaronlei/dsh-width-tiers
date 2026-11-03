@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Níveis de largura (dsh-width-tiers)",
+    "description": "Níveis de largura do conteúdo do chat (padrão / médio / largo / muito largo / largura total / personalizado) com um seletor flutuante; usa o eixo de largura nativo do app, então as alças de redimensionamento integradas continuam funcionando."
+  }
+}

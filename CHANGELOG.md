@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.0.2] - 2026-11-04
+
+### Added
+
+- **Localized plugin-page metadata.** The plugin inventory now reads
+  `locale/<lang>.json` (`meta.title` / `meta.description`), so the Settings
+  plugin card shows a localized title and summary in zh / ja / es / fr / de /
+  ru / pt instead of the English `package.json` description. The package
+  exports `./locale/*.json` and ships the directory.
+
+### Changed
+
+- **Fixed tiers advertise the width the column can actually hold.** On a
+  narrow column `medium`/`wide`/`ultra` used to show their nominal
+  (1120/1280/1400px) even though the app clamps them to
+  `max(640px, column − 176px)`. The menu and button values now show
+  `min(nominal, app maximum)`, so a 1280px row on an 800px column reads
+  640px instead of promising a width the transcript never reaches. The
+  applied and persisted target is unchanged.
+
+### Fixed
+
+- **The tier menu stays inside a short viewport.** It now caps its height at
+  `100dvh − 280px` and scrolls its rows instead of clipping the top of a
+  six-row menu on phone landscape or zoomed-in windows.
+- **The picker and menu follow the on-screen keyboard.** `visualViewport`
+  resize/scroll publish the occluded height as
+  `--dsh-width-keyboard-inset`, which the button and menu add to their fixed
+  `bottom`; the drag guide also clamps to the visible band and recenters its
+  fallback placement above the keyboard. The inset is cleared on dispose.
+- **The picker is hidden while the narrow-screen sidebar drawer is open.**
+  DSH 0.2.2-alpha.3 renders the sidebar as a drawer under 768px with a mask
+  above `shell.overlay`; the picker stayed visible but unclickable underneath
+  it. The button, menu and guide now hide while
+  `[data-sidebar-drawer]:not([data-sidebar-collapsed])` is present.
+
+### Verified
+
+- **Checked against DSH 0.2.2-alpha.3.** The width axis (`--dsh-chat-*`,
+  `[data-conversation-content]`, `[data-width-handle]`), `shell.overlay`,
+  `slots.register` options and `layout.toggleSidebar` are unchanged; the
+  narrow-screen drawer adds `data-sidebar-drawer` while
+  `[data-sidebar-collapsed]` and the `full` tier's collapse/restore keep
+  working. Controller tests cover the drawer-collapse ownership, fixed-tier
+  values on a narrow column and the keyboard inset.
+
 ## [2.0.1] - 2026-10-29
 
 ### Added

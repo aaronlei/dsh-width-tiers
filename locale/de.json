@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Breitenstufen (dsh-width-tiers)",
+    "description": "Breitenstufen für Chat-Inhalte (Standard / Mittel / Breit / Sehr breit / Volle Breite / Benutzerdefiniert) mit schwebender Auswahl; nutzt die native Breitenachse der App, sodass die integrierten Ziehpunkte weiter funktionieren."
+  }
+}
