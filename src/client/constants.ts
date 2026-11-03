@@ -44,3 +44,6 @@ export const TIER_ATTR = "data-dsh-width";
 
 /** Attribute the plugin sets on <body> while the custom-drag guide is open. */
 export const GUIDE_ATTR = "data-dsh-width-guide";
+
+/** Body custom property carrying the on-screen-keyboard inset (px). */
+export const KEYBOARD_INSET_VAR = "--dsh-width-keyboard-inset";

@@ -19,6 +19,7 @@ let column: HTMLElement;
 let frame: HTMLElement;
 let handle: HTMLElement;
 let sidebarCollapsed = false;
+let toggleCalls = 0;
 let resizeCallback: ResizeObserverCallback | null = null;
 let localeListeners: Set<() => void>;
 let activeLocale: "zh" | "en" = "zh";
@@ -39,6 +40,7 @@ function makeController(): WidthTiersController {
 	controller = createWidthTiers({
 		layout: {
 			toggleSidebar(): void {
+				toggleCalls += 1;
 				sidebarCollapsed = !sidebarCollapsed;
 				if (sidebarCollapsed) frame.setAttribute("data-sidebar-collapsed", "");
 				else frame.removeAttribute("data-sidebar-collapsed");
@@ -63,7 +65,11 @@ beforeEach(() => {
 	document.body.innerHTML = "";
 	activeLocale = "zh";
 	sidebarCollapsed = false;
+	toggleCalls = 0;
 	resizeCallback = null;
+	document.body.removeAttribute("style");
+	Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
+	Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
 	localeListeners = new Set();
 
 	const overlay = document.createElement("div");
@@ -272,6 +278,70 @@ describe("width tiers controller", () => {
 		c.actions.toggleMenu();
 		c.actions.selectTier("medium");
 		expect(c.source.getSnapshot().menuOpen).toBe(false);
+	});
+
+	it("shows the reachable width for fixed tiers on a narrow column", () => {
+		Object.defineProperty(root, "offsetWidth", { configurable: true, value: 800 });
+		const c = makeController();
+		const items = c.source.getSnapshot().items;
+
+		expect(items.find((item) => item.id === "medium")?.value).toBe("640px");
+		expect(items.find((item) => item.id === "wide")?.value).toBe("640px");
+		expect(items.find((item) => item.id === "ultra")?.value).toBe("640px");
+	});
+
+	it("collapses an open narrow-screen drawer for full and restores it", () => {
+		frame.setAttribute("data-sidebar-drawer", "");
+		const c = makeController();
+
+		c.actions.selectTier("full");
+		expect(toggleCalls).toBe(1);
+		expect(sidebarCollapsed).toBe(true);
+
+		c.actions.selectTier("standard");
+		expect(toggleCalls).toBe(2);
+		expect(sidebarCollapsed).toBe(false);
+	});
+
+	it("does not toggle a drawer the plugin did not collapse", () => {
+		frame.setAttribute("data-sidebar-drawer", "");
+		frame.setAttribute("data-sidebar-collapsed", "");
+		sidebarCollapsed = true;
+		const c = makeController();
+
+		c.actions.selectTier("full");
+		expect(toggleCalls).toBe(0);
+
+		c.actions.selectTier("standard");
+		expect(toggleCalls).toBe(0);
+	});
+
+	it("publishes the on-screen-keyboard inset and clears it on dispose", () => {
+		const listeners = new Set<() => void>();
+		const viewport = {
+			height: 500,
+			offsetTop: 0,
+			width: 1200,
+			addEventListener(_type: string, listener: () => void): void {
+				listeners.add(listener);
+			},
+			removeEventListener(_type: string, listener: () => void): void {
+				listeners.delete(listener);
+			},
+		};
+		Object.defineProperty(window, "visualViewport", { configurable: true, value: viewport });
+
+		const c = makeController();
+		expect(document.body.style.getPropertyValue("--dsh-width-keyboard-inset")).toBe("268px");
+
+		viewport.height = 600;
+		for (const listener of listeners) listener();
+		expect(document.body.style.getPropertyValue("--dsh-width-keyboard-inset")).toBe("168px");
+
+		c.dispose();
+		controller = undefined;
+		expect(listeners.size).toBe(0);
+		expect(document.body.style.getPropertyValue("--dsh-width-keyboard-inset")).toBe("");
 	});
 
 	it("disposes every owned resource", () => {

@@ -4,6 +4,7 @@ import {
 	FALLBACK_HEAL_MS,
 	GUIDE_ATTR,
 	KEY,
+	KEYBOARD_INSET_VAR,
 	NOMINAL_WIDTH_PX,
 	OLD_KEY,
 	READY_TIMEOUT_MS,
@@ -97,6 +98,24 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	let guideWidth = GUIDE_WIDTH_PX;
 	let tierBeforeGuide: TierId = "standard";
 
+	/* On-screen-keyboard inset. The picker and menu are fixed against the
+	 * layout viewport, which the keyboard does not shrink, so publish the
+	 * occluded height for their CSS and keep the guide inside the visible
+	 * band while it is open. */
+	let keyboardInset = 0;
+
+	function syncKeyboardInset(): void {
+		const viewport = window.visualViewport;
+		const next =
+			viewport == null
+				? 0
+				: Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+		keyboardInset = next;
+		if (next > 0) body().style.setProperty(KEYBOARD_INSET_VAR, `${next}px`);
+		else body().style.removeProperty(KEYBOARD_INSET_VAR);
+		if (guideActive) updateGuideStyle();
+	}
+
 	/* Whether this plugin wrote the app's width preference. Native drags also
 	 * write it, so unload only removes a value this plugin owns. */
 	let preferenceOwned = false;
@@ -161,8 +180,15 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			}
 			case "medium":
 			case "wide":
-			case "ultra":
-				return `${NOMINAL_WIDTH_PX[tierId]}px`;
+			case "ultra": {
+				const nominal = NOMINAL_WIDTH_PX[tierId];
+				const root = roots.find();
+				/* Advertise what the column can actually hold: on a narrow column
+				 * the app clamps these tiers to its own maximum, so the nominal px
+				 * would promise a width the transcript never reaches. */
+				if (root === null || root.offsetWidth <= 0) return `${nominal}px`;
+				return `${Math.round(Math.min(nominal, fullWidthPx(root.offsetWidth)))}px`;
+			}
 			case "full": {
 				const root = roots.find();
 				if (root === null) return "—";
@@ -318,6 +344,12 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	 * show the live transcript width while the user drags. The guide never
 	 * writes the width itself: the app's native drag does (and wins the
 	 * cascade), and the plugin only records the settled value on release. */
+	function fallbackGuideStyle(): PickerGuideStyle {
+		if (keyboardInset <= 0) return GUIDE_FALLBACK;
+		const center = Math.max(24, Math.round((window.innerHeight - keyboardInset) / 2));
+		return { left: "auto", right: "24px", top: `${center}px` };
+	}
+
 	function computeGuideStyle(): PickerGuideStyle {
 		const handle =
 			guideHandle !== null && document.contains(guideHandle)
@@ -325,11 +357,12 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 				: document.querySelector('[data-width-handle="right"]');
 		const viewport = window.innerWidth || 0;
 		if (handle === null || typeof handle.getBoundingClientRect !== "function" || viewport === 0) {
-			return GUIDE_FALLBACK;
+			return fallbackGuideStyle();
 		}
 		const rect = handle.getBoundingClientRect();
 		const gap = 10;
-		const top = `${rect.top + rect.height / 2}px`;
+		const visibleBottom = (window.innerHeight || 0) - keyboardInset;
+		const top = `${Math.max(8, Math.min(rect.top + rect.height / 2, visibleBottom - 24))}px`;
 		if (viewport - rect.right >= guideWidth + gap) {
 			return { left: `${rect.right + gap}px`, right: "auto", top };
 		}
@@ -754,6 +787,15 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	};
 	window.addEventListener("resize", onWindowResize);
 
+	/* Keep the fixed picker/menu above the on-screen keyboard and the guide
+	 * inside the visible band; desktop visualViewport stays viewport-sized. */
+	const visualViewport = window.visualViewport ?? null;
+	if (visualViewport !== null) {
+		visualViewport.addEventListener("resize", syncKeyboardInset);
+		visualViewport.addEventListener("scroll", syncKeyboardInset);
+	}
+	syncKeyboardInset();
+
 	/* ---- publish the initial state and wake on language changes ---- */
 	snapshot = buildSnapshot();
 	const unsubscribeLocale = options.locale.subscribe(() => {
@@ -809,6 +851,11 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			window.removeEventListener("resize", onWindowResize);
 			window.removeEventListener("load", attach);
 			window.removeEventListener("storage", onStorage);
+			if (visualViewport !== null) {
+				visualViewport.removeEventListener("resize", syncKeyboardInset);
+				visualViewport.removeEventListener("scroll", syncKeyboardInset);
+			}
+			body().style.removeProperty(KEYBOARD_INSET_VAR);
 			if (observer !== null) observer.disconnect();
 			document.removeEventListener("pointerdown", onHandlePointerDown, true);
 			document.removeEventListener("pointerup", onHandlePointerUp, true);
