@@ -1,5 +1,55 @@
 # Changelog
 
+## [2.0.3] - 2026-11-19
+
+### Changed
+
+- **Cleaner manifest, one read per snapshot.** `dsh.client.inject` no longer
+  names `@deepseek-ai/dsh-client-ui-slots`: in 0.2.2-rc.3 the slot system ships
+  inside the Web frontend's static module table, so the edge matched no package
+  row and was inert. The entry and the controller now share one service-type
+  source, and a snapshot measures the width root and reads the recorded custom
+  width once before deriving the button, hint and menu values.
+- **Menu rows describe tiers; only the button reports what is applied.**
+  Fixed tiers keep 1120/1280/1400 in the menu, and no row changes when the
+  layout changes or a tier is selected; the button shows the clamped
+  width actually in effect, and the `full` row notes that it hides the
+  sidebar. The tooltip also lists definitions, not per-launch clamps.
+
+### Added
+
+- **The settled width is announced to screen readers.** The decorative guide
+  stays `aria-hidden`, and a visually hidden `role="status"` region receives
+  the localized width once a drag settles (and the hint when the guide opens),
+  so a screen reader does not narrate every pointer move.
+
+### Fixed
+
+- **A width dragged before installation now shows as `custom`.** When no tier
+  is recorded but the app already carries a native width preference, the
+  plugin adopts that width instead of claiming the app default while the
+  transcript is wider. The adopted preference is not claimed for removal on
+  unload.
+- **A native drag closes an open menu.** Pressing a `[data-width-handle]`
+  while the tier menu is open used to leave the menu floating over the guide;
+  focus now returns to the picker button instead of a hidden row.
+
+### Verified
+
+- **Checked against DSH 0.2.2-rc.3 in the live Web UI.** Booted the rc.3 Web
+  app with this bundle and drove it end to end: picker mount in
+  `shell.overlay`, tier writes and the 640/176 clamp (including re-clamp on
+  resize), persistence across reload, `full` sidebar collapse, the first-use
+  custom guide, native-handle interception (including the menu closing on a
+  drag), the settled-width live-region announcement, adoption of a width
+  dragged before installation, stable menu definitions (including the selected
+  row) while `full` collapses the sidebar, Chinese/English copy, and the
+  narrow-screen drawer hiding.
+  61 checks passed; `shell.overlay`,
+  `data-conversation-content`, `data-width-handle`, `data-sidebar-*`,
+  `ctx.slots`/`ctx.layout`/`ctx.locale` and the theme tokens the plugin uses
+  are unchanged from alpha.3.
+
 ## [2.0.2] - 2026-11-04
 
 ### Added

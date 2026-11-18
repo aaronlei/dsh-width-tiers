@@ -33,6 +33,7 @@ function snapshot(overrides: Partial<PickerSnapshot> = {}): PickerSnapshot {
 			mode: "hint",
 			text: "",
 			style: { left: "auto", right: "24px", top: "50%" },
+			announcement: "",
 		},
 	};
 	return { ...base, ...overrides };
@@ -139,6 +140,7 @@ describe("WidthTierPicker", () => {
 			mode: "hint" as const,
 			text: zh["guide.hint"],
 			style: { left: "820px", right: "auto", top: "260px" },
+			announcement: zh["guide.hint"],
 		};
 		const { container } = render(<Harness initial={snapshot({ guide })} />);
 		const element = container.querySelector<HTMLElement>("#dsh-width-guide");
@@ -146,7 +148,47 @@ describe("WidthTierPicker", () => {
 		expect(element?.hasAttribute("hidden")).toBe(false);
 		expect(element?.dataset.mode).toBe("hint");
 		expect(element?.style.left).toBe("820px");
-		expect(screen.getByText(zh["guide.hint"])).toBeDefined();
+		expect(element?.textContent).toContain(zh["guide.hint"]);
+	});
+
+	it("returns focus to the button when the menu closes from outside", () => {
+		render(<Harness initial={snapshot({ menuOpen: true })} />);
+		const rows = screen.getAllByRole("menuitemradio");
+		rows[2]?.focus();
+		expect(document.activeElement).toBe(rows[2]);
+
+		fireEvent.click(screen.getByRole("button", { name: /点击选择档位/ }));
+
+		expect(document.activeElement).toBe(
+			screen.getByRole("button", { name: /点击选择档位/ }),
+		);
+	});
+
+	it("renders the full tier's sidebar note", () => {
+		const base = snapshot({ menuOpen: true });
+		const items = base.items.map((item) =>
+			item.id === "full" ? { ...item, note: zh["tier.full.note"] } : item,
+		);
+		const { container } = render(<Harness initial={{ ...base, items }} />);
+
+		expect(container.querySelector(".dshwm-note")?.textContent).toContain(zh["tier.full.note"]);
+	});
+
+	it("publishes the guide announcement through a polite status region", () => {
+		const guide = {
+			active: true,
+			dragging: false,
+			mode: "live" as const,
+			text: "1000px",
+			style: { left: "820px", right: "auto", top: "260px" },
+			announcement: "对话区宽度 1000px",
+		};
+		const { container } = render(<Harness initial={snapshot({ guide })} />);
+		const status = container.querySelector('[role="status"]');
+
+		expect(status?.textContent).toBe("对话区宽度 1000px");
+		/* The decorative bubble must stay out of the accessibility tree. */
+		expect(container.querySelector("#dsh-width-guide")?.getAttribute("aria-hidden")).toBe("true");
 	});
 
 	it("marks the selected row for assistive technology", () => {

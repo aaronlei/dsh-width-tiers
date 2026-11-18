@@ -92,6 +92,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	let guideFromMenu = false;
 	let guideMode: "hint" | "live" = "hint";
 	let guideText = "";
+	let announcement = "";
 	let guideStyle: PickerGuideStyle = GUIDE_FALLBACK;
 	let guideHandle: Element | null = null;
 	let guideHideTimer: number | null = null;
@@ -152,13 +153,10 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		return document.querySelector("[data-sidebar-collapsed]") !== null;
 	}
 
-	/* NOTE: the 1.0.x "close the right panel on non-standard tiers" self-heal
-	 * is gone on purpose. On 0.1.7 the rightbar panel lives in its own seat:
-	 * closeRightbar() only retracts the grid TRACK (rightbarTrack=false) while
-	 * the seat stays expanded, so the panel keeps rendering as an OVERLAY
-	 * pinned to the frame's right edge — hanging over and covering the
-	 * conversation. The plugin must never touch the rightbar; the app's own
-	 * width axis already yields space to the panel. */
+	/* Never touch the rightbar: closeRightbar() retracts only the grid TRACK
+	 * (rightbarTrack=false) while the seat stays expanded, so the panel keeps
+	 * rendering as an overlay pinned to the frame's right edge and covers the
+	 * conversation. The app's own width axis already yields space to it. */
 	function collapseSidebar(): void {
 		if (!isSidebarCollapsed()) layout.toggleSidebar();
 	}
@@ -167,40 +165,48 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		if (isSidebarCollapsed()) layout.toggleSidebar();
 	}
 
-	/* Value shown in the picker. Fixed tiers advertise their nominal px;
-	 * standard and full are inherently relative to the current column, so they
-	 * show the px the app resolves right now (full is the column's maximum,
-	 * not a word). */
-	function tierValueText(tierId: string): string {
+	/* The menu describes the tiers, not the transient layout: fixed tiers keep
+	 * their nominal width, so selecting `full` (which collapses the sidebar and
+	 * widens the column) cannot change the other rows' definitions. Standard and
+	 * full are inherently relative to the current column; the root and the
+	 * recorded custom width arrive pre-read so a snapshot reads them once. */
+	function definitionValue(
+		tierId: TierId,
+		root: HTMLElement | null,
+		customPx: number | null,
+	): string {
 		switch (tierId) {
-			case "standard": {
-				const root = roots.find();
-				if (root === null) return "—";
-				return `${Math.round(defaultWidthPx(root.offsetWidth))}px`;
-			}
+			case "standard":
+				return root === null ? "—" : `${Math.round(defaultWidthPx(root.offsetWidth))}px`;
 			case "medium":
 			case "wide":
-			case "ultra": {
-				const nominal = NOMINAL_WIDTH_PX[tierId];
-				const root = roots.find();
-				/* Advertise what the column can actually hold: on a narrow column
-				 * the app clamps these tiers to its own maximum, so the nominal px
-				 * would promise a width the transcript never reaches. */
-				if (root === null || root.offsetWidth <= 0) return `${nominal}px`;
-				return `${Math.round(Math.min(nominal, fullWidthPx(root.offsetWidth)))}px`;
-			}
-			case "full": {
-				const root = roots.find();
-				if (root === null) return "—";
-				return `${Math.round(fullWidthPx(root.offsetWidth))}px`;
-			}
-			case "custom": {
-				const dragged = readNumber(CUSTOM_KEY);
-				return dragged === null ? t("value.custom.unset") : `${Math.round(dragged)}px`;
-			}
-			default:
-				return "—";
+			case "ultra":
+				return `${NOMINAL_WIDTH_PX[tierId]}px`;
+			case "full":
+				return root === null ? "—" : `${Math.round(fullWidthPx(root.offsetWidth))}px`;
+			case "custom":
+				return customPx === null ? t("value.custom.unset") : `${Math.round(customPx)}px`;
 		}
+	}
+
+	/* What the tier yields right now, after the app's 640px/column clamp. The
+	 * selected row and the button report this; other rows keep definitions. */
+	function appliedValue(
+		tierId: TierId,
+		root: HTMLElement | null,
+		customPx: number | null,
+	): string {
+		if (tierId === "standard" || tierId === "full") {
+			return definitionValue(tierId, root, customPx);
+		}
+		if (tierId === "custom" && customPx === null) {
+			return definitionValue(tierId, root, customPx);
+		}
+		if (root === null || root.offsetWidth <= 0) {
+			return definitionValue(tierId, root, customPx);
+		}
+		const applied = appliedTierPx(tierId, root.offsetWidth, customPx);
+		return applied === null ? definitionValue(tierId, root, customPx) : `${Math.round(applied)}px`;
 	}
 
 	/* The px the app currently resolves for the transcript, after its own
@@ -214,11 +220,24 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	function buildSnapshot(): PickerSnapshot {
 		const tier = currentTier();
 		const def = tierOf(tier);
+		const root = roots.find();
+		const customPx = readNumber(CUSTOM_KEY);
+		/* The menu is a stable definition list: no row changes when the layout
+		 * changes or another tier is selected. Only the button reports the width
+		 * actually applied under the current column. */
+		const values = new Map<TierId, string>(
+			TIERS.map((tierDef): [TierId, string] => [
+				tierDef.id,
+				definitionValue(tierDef.id, root, customPx),
+			]),
+		);
 		const label = t(def.key);
-		const value = tierValueText(tier);
+		const value = appliedValue(tier, root, customPx);
 		const summary = t("button.title.summary", { label, value });
 		const hint = t("button.title.hint", {
-			list: TIERS.map((tierDef) => `${t(tierDef.key)} ${tierValueText(tierDef.id)}`).join(" / "),
+			list: TIERS.map(
+				(tierDef) => `${t(tierDef.key)} ${definitionValue(tierDef.id, root, customPx)}`,
+			).join(" / "),
 		});
 		return {
 			tier,
@@ -234,7 +253,8 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			items: TIERS.map((tierDef) => ({
 				id: tierDef.id,
 				label: t(tierDef.key),
-				value: tierValueText(tierDef.id),
+				value: values.get(tierDef.id) ?? "",
+				note: tierDef.id === "full" ? t("tier.full.note") : undefined,
 				selected: tierDef.id === tier,
 			})),
 			guide: {
@@ -243,6 +263,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 				mode: guideMode,
 				text: guideText,
 				style: guideStyle,
+				announcement,
 			},
 		};
 	}
@@ -311,6 +332,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	/* `persist` is false when another tab already wrote the tier: adopting it
 	 * must not write localStorage again. */
 	function applyTier(tier: TierId, persist = true): void {
+		announcement = "";
 		body().setAttribute(TIER_ATTR, tier);
 		if (persist) {
 			try {
@@ -391,6 +413,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		body().setAttribute(GUIDE_ATTR, "custom");
 		guideMode = "hint";
 		guideText = t("guide.hint");
+		announcement = guideText;
 		guideStyle = computeGuideStyle();
 		emit();
 	}
@@ -403,6 +426,9 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			window.clearTimeout(guideHideTimer);
 			guideHideTimer = null;
 		}
+		/* A drag owns the surface: an open menu must not linger over the guide. */
+		menuOpen = false;
+		announcement = "";
 		guideActive = true;
 		guideDragging = true;
 		guideHandle = handle ?? null;
@@ -430,6 +456,9 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		guideDragging = false;
 		guideMode = "live";
 		guideText = guideValueText();
+		/* Announce the settled width once; per-move announcements would flood
+		 * a screen reader during the drag. */
+		announcement = t("guide.announce", { value: guideText });
 		if (guideHideTimer !== null) window.clearTimeout(guideHideTimer);
 		guideHideTimer = window.setTimeout(() => endGuide(false), GUIDE_HIDE_MS);
 		emit();
@@ -450,6 +479,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		guideHandle = null;
 		guideWidth = GUIDE_WIDTH_PX;
 		guideStyle = GUIDE_FALLBACK;
+		announcement = "";
 		body().removeAttribute(GUIDE_ATTR);
 		const restore = restoreTier && guideFromMenu && readNumber(CUSTOM_KEY) === null;
 		guideFromMenu = false;
@@ -576,6 +606,32 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		}
 	}
 
+	/* A native drag can predate the plugin: the app keeps its own width
+	 * preference while no tier is recorded. Adopt that width as `custom`
+	 * instead of showing the app default over a wider transcript. */
+	function adoptNativeWidth(): boolean {
+		try {
+			if (window.localStorage.getItem(KEY) !== null) return false;
+		} catch {
+			return false;
+		}
+		const inherited = readNumber(APP_PREF_KEY);
+		if (inherited === null) return false;
+		try {
+			window.localStorage.setItem(CUSTOM_KEY, String(Math.round(inherited)));
+		} catch {
+			/* storage unavailable: the tier still applies this session */
+		}
+		/* Reuse the native preference without claiming ownership: unload must
+		 * leave a width this plugin did not originate in place. */
+		const owned = preferenceOwned;
+		const written = preferenceWritten;
+		applyTier("custom");
+		preferenceOwned = owned;
+		preferenceWritten = written;
+		return true;
+	}
+
 	/* Wait for the AppFrame overlay layer (rendered unconditionally once the
 	 * shell exists) before restoring the saved tier and starting self-heal.
 	 * The picker itself is rendered by the slot system, not created here. */
@@ -591,7 +647,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		}
 		const saved = getSavedTier();
 		if (saved !== "standard") applyTier(saved);
-		else emit();
+		else if (!adoptNativeWidth()) emit();
 		startHealing();
 		const cached = roots.cached();
 		if (cached !== null) observeWidthTarget(cached);
@@ -799,7 +855,10 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	/* ---- publish the initial state and wake on language changes ---- */
 	snapshot = buildSnapshot();
 	const unsubscribeLocale = options.locale.subscribe(() => {
-		if (guideActive && !guideDragging && guideMode === "hint") guideText = t("guide.hint");
+		if (guideActive && !guideDragging && guideMode === "hint") {
+			guideText = t("guide.hint");
+			announcement = guideText;
+		}
 		emit();
 	});
 

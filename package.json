@@ -1,6 +1,6 @@
 {
   "name": "dsh-width-tiers",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "DSH Web client plugin: chat content width tiers (standard / medium / wide / ultra / full / custom) with a floating picker button. Mounts into the app's shell.overlay slot on DSH 0.2.x and drives the native width axis, so the built-in drag handles keep working. UI copy follows the app language (zh / en / ja / es / fr / de / ru / pt).",
   "license": "MIT",
   "author": "aaronlei",
@@ -31,7 +31,6 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-locale"
       ]
     }

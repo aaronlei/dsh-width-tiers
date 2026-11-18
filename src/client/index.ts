@@ -1,18 +1,16 @@
-import { createWidthTiers } from "./controller.ts";
+import {
+	createWidthTiers,
+	type LayoutService,
+	type LocaleSubscription,
+} from "./controller.ts";
 import { dictionaries, NS, type TFunction } from "./locales.ts";
 import type { PickerActions, PickerSource } from "./picker-state.ts";
 import { WidthTierPicker } from "./WidthTierPicker.tsx";
 
-/** Locale service slice the plugin entry needs. */
-interface LocaleService {
+/** Locale service surface the plugin entry needs: registration plus wakeups. */
+interface LocaleService extends LocaleSubscription {
 	register(namespace: string, locale: string, dictionary: Record<string, string>): () => void;
 	bind(namespace: string): (key: string, values?: Record<string, string>) => string;
-	subscribe(listener: () => void): () => void;
-}
-
-/** Layout service slice the plugin entry needs. */
-interface LayoutService {
-	toggleSidebar(): void;
 }
 
 /** Values the renderer turns into the picker's props. */
@@ -74,6 +72,12 @@ export function apply(ctx: ClientContext): void {
 		"dsh-width-tiers: controller",
 	);
 
+	/* One stable inject face: the renderer keys its hook binding on it, so a
+	 * fresh object per call would only add cache misses. */
+	const injected: OverlayInjected = {
+		hooks: { picker: controller.source },
+		actions: controller.actions,
+	};
 	ctx.slots.inject("shell.overlay", () =>
 		ctx.slots.register(
 			{
@@ -81,10 +85,7 @@ export function apply(ctx: ClientContext): void {
 				id: "width-tiers",
 				order: 100,
 				locale: NS,
-				inject: (): OverlayInjected => ({
-					hooks: { picker: controller.source },
-					actions: controller.actions,
-				}),
+				inject: () => injected,
 			},
 			WidthTierPicker,
 		),

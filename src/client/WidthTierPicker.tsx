@@ -79,6 +79,14 @@ export function WidthTierPicker({ usePicker, actions }: WidthTierPickerProps) {
 		selected?.focus();
 	}, [state.menuOpen, state.tier]);
 
+	/* A menu closed from outside (a native handle press) must not leave focus
+	 * on a now-hidden row. */
+	useEffect(() => {
+		if (state.menuOpen) return;
+		const active = document.activeElement;
+		if (active !== null && menuRef.current?.contains(active)) buttonRef.current?.focus();
+	}, [state.menuOpen]);
+
 	/* Report the real bubble width so the controller places it beside the
 	 * handle instead of relying on an estimate. */
 	useLayoutEffect(() => {
@@ -186,11 +194,21 @@ export function WidthTierPicker({ usePicker, actions }: WidthTierPickerProps) {
 							buttonRef.current?.focus();
 						}}
 					>
-						<span className="dshwm-label">{item.label}</span>
+						<span className="dshwm-label">
+							{item.label}
+							{item.note === undefined ? null : (
+								<span className="dshwm-note"> · {item.note}</span>
+							)}
+						</span>
 						<span className="dshwm-value">{item.value}</span>
 					</button>
 				))}
 			</div>
+			{/* The guide itself is decorative; the settled width is published
+			 * here once so a screen reader does not narrate every pointermove. */}
+			<span className="dshwt-sr" role="status">
+				{state.guide.announcement}
+			</span>
 			<div
 				ref={guideRef}
 				id="dsh-width-guide"

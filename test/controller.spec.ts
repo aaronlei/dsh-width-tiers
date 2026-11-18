@@ -268,6 +268,48 @@ describe("width tiers controller", () => {
 		expect(localStorage.getItem(APP_PREF_KEY)).toBeNull();
 	});
 
+	it("adopts a native width preference from before installation as custom", () => {
+		localStorage.setItem(APP_PREF_KEY, "1000");
+		const c = makeController();
+		const state = c.source.getSnapshot();
+
+		expect(state.tier).toBe("custom");
+		expect(state.button.active).toBe(true);
+		expect(state.items.find((item) => item.id === "custom")?.value).toBe("1000px");
+		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1000px");
+		expect(localStorage.getItem(KEY)).toBe("custom");
+		expect(localStorage.getItem(CUSTOM_KEY)).toBe("1000");
+	});
+
+	it("closes an open menu when a native drag starts", () => {
+		const c = makeController();
+		c.actions.toggleMenu();
+		expect(c.source.getSnapshot().menuOpen).toBe(true);
+
+		handle.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+
+		const state = c.source.getSnapshot();
+		expect(state.menuOpen).toBe(false);
+		expect(state.guide.active).toBe(true);
+		expect(state.guide.announcement).toBe("");
+	});
+
+	it("announces the first-use hint and the settled width", () => {
+		const c = makeController();
+		c.actions.selectTier("custom");
+		expect(c.source.getSnapshot().guide.announcement).toBe(zh["guide.hint"]);
+
+		handle.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+		expect(c.source.getSnapshot().guide.announcement).toBe("");
+
+		column.style.setProperty("--dsh-chat-user-width", "1000px");
+		handle.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+
+		expect(c.source.getSnapshot().guide.announcement).toBe(
+			zh["guide.announce"].replace("{value}", "1000px"),
+		);
+	});
+
 	it("opens and closes the menu through actions", () => {
 		const c = makeController();
 		c.actions.toggleMenu();
@@ -280,14 +322,38 @@ describe("width tiers controller", () => {
 		expect(c.source.getSnapshot().menuOpen).toBe(false);
 	});
 
-	it("shows the reachable width for fixed tiers on a narrow column", () => {
+	it("keeps fixed menu rows nominal and reports the clamp on the button", () => {
 		Object.defineProperty(root, "offsetWidth", { configurable: true, value: 800 });
 		const c = makeController();
-		const items = c.source.getSnapshot().items;
+		let state = c.source.getSnapshot();
 
-		expect(items.find((item) => item.id === "medium")?.value).toBe("640px");
-		expect(items.find((item) => item.id === "wide")?.value).toBe("640px");
-		expect(items.find((item) => item.id === "ultra")?.value).toBe("640px");
+		expect(state.items.find((item) => item.id === "medium")?.value).toBe("1120px");
+		expect(state.items.find((item) => item.id === "wide")?.value).toBe("1280px");
+		expect(state.items.find((item) => item.id === "ultra")?.value).toBe("1400px");
+
+		c.actions.selectTier("medium");
+		state = c.source.getSnapshot();
+		expect(state.button.value).toBe("640px");
+		expect(state.items.find((item) => item.id === "medium")?.value).toBe("1120px");
+		expect(state.items.find((item) => item.id === "wide")?.value).toBe("1280px");
+	});
+
+	it("keeps fixed tier definitions stable when full changes the column", () => {
+		const c = makeController();
+		const before = c.source.getSnapshot().items;
+
+		c.actions.selectTier("full");
+		const after = c.source.getSnapshot().items;
+
+		for (const id of ["medium", "wide", "ultra"] as const) {
+			expect(after.find((item) => item.id === id)?.value).toBe(
+				before.find((item) => item.id === id)?.value,
+			);
+			expect(after.find((item) => item.id === id)?.value).toBe(
+				{ medium: "1120px", wide: "1280px", ultra: "1400px" }[id],
+			);
+		}
+		expect(after.find((item) => item.id === "full")?.note).toBe(zh["tier.full.note"]);
 	});
 
 	it("collapses an open narrow-screen drawer for full and restores it", () => {

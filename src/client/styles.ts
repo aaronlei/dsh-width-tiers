@@ -5,6 +5,7 @@
 const css = [
 	"#dsh-wide-toggle{position:fixed;right:10px;bottom:calc(216px + var(--dsh-width-keyboard-inset,0px) + env(safe-area-inset-bottom,0px));z-index:999;display:flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:50%;overflow:hidden;background:var(--dsw-alias-button-floating-fill);color:var(--dsw-alias-label-secondary);box-shadow:0 2px 8px rgba(0,0,0,.18);cursor:pointer;opacity:.72;transition:opacity .2s ease,width .2s ease,border-radius .2s ease,background .2s ease,color .2s ease}",
 	"#dsh-wide-toggle::after{content:'';position:fixed;right:10px;bottom:calc(216px + var(--dsh-width-keyboard-inset,0px) + env(safe-area-inset-bottom,0px));width:36px;height:36px;pointer-events:auto}",
+	".dshwt-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}",
 	"#dsh-wide-toggle:hover{opacity:1}",
 	"#dsh-wide-toggle:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px;width:36px;border-radius:50%}",
 	"#dsh-wide-toggle:not(:hover):not(:focus-visible){width:10px;border-radius:6px}",
@@ -13,13 +14,14 @@ const css = [
 	"#dsh-wide-toggle.pulse{animation:dsh-wide-pulse .65s ease-out}",
 	"@media (prefers-reduced-motion:reduce){#dsh-wide-toggle{transition:none}#dsh-wide-toggle.pulse{animation:none}}",
 	"@keyframes dsh-wide-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--dsw-alias-state-business-primary) 60%,transparent)}100%{box-shadow:0 0 0 14px transparent}}",
-	"#dsh-width-menu{position:fixed;right:20px;bottom:calc(264px + var(--dsh-width-keyboard-inset,0px) + env(safe-area-inset-bottom,0px));z-index:1000;min-width:196px;max-height:calc(100vh - 280px);max-height:calc(100dvh - 280px);overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-specific-menu);box-shadow:0 8px 28px rgba(0,0,0,.24);display:flex;flex-direction:column;gap:2px}",
+	"#dsh-width-menu{position:fixed;right:20px;bottom:calc(264px + var(--dsh-width-keyboard-inset,0px) + env(safe-area-inset-bottom,0px));z-index:1000;min-width:196px;max-width:calc(100vw - 40px);max-height:calc(100vh - 280px);max-height:calc(100dvh - 280px);overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-specific-menu);box-shadow:0 8px 28px rgba(0,0,0,.24);display:flex;flex-direction:column;gap:2px}",
 	"#dsh-width-menu[hidden]{display:none}",
 	"#dsh-width-menu button{display:flex;flex:none;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer}",
 	"#dsh-width-menu button:hover{background:var(--dsw-alias-interactive-bg-hover)}",
 	"#dsh-width-menu button:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
 	"#dsh-width-menu button.selected{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-state-business-primary)}",
 	"#dsh-width-menu .dshwm-value{color:var(--dsw-alias-label-tertiary);font-size:12px}",
+	"#dsh-width-menu .dshwm-note{color:var(--dsw-alias-label-tertiary);font-size:11px;font-weight:400}",
 	"#dsh-width-menu button.selected .dshwm-value{color:var(--dsw-alias-state-business-primary)}",
 	"#dsh-width-guide{position:fixed;z-index:1001;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-specific-menu);color:var(--dsw-alias-label-primary);font-size:12px;line-height:16px;box-shadow:0 8px 28px rgba(0,0,0,.24);pointer-events:none;white-space:nowrap;transform:translateY(-50%)}",
 	"#dsh-width-guide[hidden]{display:none}",
@@ -27,9 +29,9 @@ const css = [
 	"#dsh-width-guide[data-mode=live]{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}",
 	"body[data-dsh-width-guide] [data-width-handle]{background:linear-gradient(to bottom,transparent calc(50% - 64px),color-mix(in srgb,var(--dsw-alias-state-business-primary) 18%,transparent) calc(50% - 64px),color-mix(in srgb,var(--dsw-alias-state-business-primary) 18%,transparent) calc(50% + 64px),transparent calc(50% + 64px));border-radius:3px}",
 	"body[data-dsh-width-guide] [data-width-handle]::after{opacity:1}",
-	/* DSH 0.2.2-alpha.3 renders the narrow-screen sidebar as a drawer with a
-	 * mask above `shell.overlay`; the picker would stay visible but unclickable
-	 * underneath it, so hide the whole surface while the drawer is open. */
+	/* The narrow-screen sidebar is a drawer with a mask above `shell.overlay`;
+	 * the picker would stay visible but unclickable underneath it, so hide the
+	 * whole surface while the drawer is open. */
 	"body:has([data-sidebar-drawer]:not([data-sidebar-collapsed])) #dsh-wide-toggle,body:has([data-sidebar-drawer]:not([data-sidebar-collapsed])) #dsh-width-menu,body:has([data-sidebar-drawer]:not([data-sidebar-collapsed])) #dsh-width-guide{opacity:0;visibility:hidden;pointer-events:none}",
 ].join("");
 

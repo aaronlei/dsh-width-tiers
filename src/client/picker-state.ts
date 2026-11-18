@@ -19,6 +19,8 @@ export interface PickerMenuItemState {
 	id: TierId;
 	label: string;
 	value: string;
+	/** Secondary line, e.g. the full tier's sidebar-collapse note. */
+	note?: string;
 	selected: boolean;
 }
 
@@ -36,6 +38,8 @@ export interface PickerGuideState {
 	mode: "hint" | "live";
 	text: string;
 	style: PickerGuideStyle;
+	/** Polite live-region copy: set when a hint opens or a drag settles. */
+	announcement: string;
 }
 
 /** Immutable render snapshot published by the width-tier controller. */

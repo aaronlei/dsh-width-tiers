@@ -9,9 +9,8 @@
  *    the shell's `window.__ModuleLoader__` materializes the factory. The
  *    banner/footer wrap the CommonJS output in that loader handoff and stamp
  *    the package name as the module id, exactly like the shipped client
- *    plugins. React and the other baseline modules are absent: this half uses
- *    no platform module yet, and the P2 slot migration will add `react` as an
- *    external rather than bundling it.
+ *    plugins. Only `react` and `react/jsx-runtime` are imported, both from
+ *    the browser module table, so the bundle carries just this plugin's code.
  */
 import { readFileSync } from "node:fs";
 import { defineConfig } from "tsdown";

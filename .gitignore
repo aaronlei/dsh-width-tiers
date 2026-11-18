@@ -4,3 +4,4 @@ node_modules/
 /.pnpm/
 /.pnpm-store/
 /.build/
+/.e2e/

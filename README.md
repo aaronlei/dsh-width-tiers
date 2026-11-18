@@ -27,16 +27,22 @@
 
 Fixed and custom widths are clamped by the app to
 `max(640px, column − 176px)`; the standard tier follows the app default
-(680–920px). On a narrow window a wider fixed tier therefore behaves like
-`full`, and the menu shows the reachable maximum for fixed tiers (1280px
-reads 640px on an 800px column).
+(680–920px). The menu always lists each tier's nominal width (1120/1280/1400); only the
+button shows the width actually applied after the clamp (on an 800px column,
+Wide reads 1120px in the menu and 640px on the button once selected).
+`Full` follows the live column maximum and is marked as hiding the left
+sidebar, so selecting it can widen the column and change its own value.
 
 ## Features
 
 - Uses the app's native width axis (`--dsh-chat-user-width` and
   `dsh.conversation.contentWidth`), so the built-in drag handles keep working.
-- Persists the selected tier and restores it on the next visit.
+- Persists the selected tier and restores it on the next visit; a width dragged
+  with the native handles before installation is adopted as `custom`.
+- A native drag closes an open menu, and the settled width is announced through
+  a polite live region for screen readers.
 - Follows **Settings → Language** (中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português), including the Settings plugin card's title and summary (`locale/<lang>.json`).
+- Menu rows describe the tiers; the button shows the width actually applied.
 - Menu supports ArrowUp/Down, Home/End, Escape and Tab, with focus restoration.
 - Tier changes sync across tabs.
 - Respects `prefers-reduced-motion`.
@@ -87,9 +93,10 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 ## Compatibility
 
 - DSH Web 0.2.x with a `web` profile (`shell.overlay` slot and `slots` service).
-- Width axis checked against DSH 0.2.2-alpha.3: 640px floor, 176px handle
-  budget, `--dsh-chat-*` variables, `data-width-handle`, layout/locale services.
-- Narrow screens: the picker hides while alpha.3's sidebar drawer
+- Width axis checked against DSH 0.2.2-rc.3 in the live Web UI: 640px floor,
+  176px handle budget, `--dsh-chat-*` variables, `data-width-handle`,
+  layout/locale services.
+- Narrow screens: the picker hides while the sidebar drawer
   (`data-sidebar-drawer`) is open and follows the on-screen keyboard.
 
 ## Development
