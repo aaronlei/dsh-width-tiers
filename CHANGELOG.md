@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.0.4] - 2026-11-25
+
+### Fixed
+
+- **Medium / Wide / Ultra apply again on DSH 0.2.3.** 0.2.3 registers
+  `--dsh-chat-user-width` as `@property { syntax: '*'; inherits: false }`, so a
+  value written on an ancestor no longer reaches the `var()` that resolves
+  `--dsh-chat-content-width`. The plugin still published on
+  `[data-conversation-content]`'s parent (where the property used to inherit),
+  so every fixed tier was silently dropped: only `standard` (which writes
+  nothing) and `full` (whose sidebar collapse makes the app republish onto the
+  right element) appeared to work. The width is now written on the width root
+  itself, matching where the app publishes it, and the tier takes effect
+  immediately instead of after the next resize or reload.
+- **The standard tier reports the app's real default.** 0.2.3 lowered the
+  no-preference ceiling from 920px to 880px
+  (`clamp(680px, column × 0.64, 880px)`); the picker and the width readout
+  follow it.
+
+### Changed
+
+- **Drags recorded before 0.2.3 stay readable.** A press on a native handle
+  reads the inline width from the root first and the parent second, so a custom
+  width published on the old element is still adopted and recorded.
+
+### Verified
+
+- **Checked against DSH 0.2.3-alpha.2 in the live Web UI.** Every tier now
+  resolves at once: medium 1120px, wide 1280px, ultra 1400px, full 1568px
+  (column 1744px), standard 880px; the width survives reload, and the drag
+  guide, custom adoption, menu/dialog copy and the narrow-screen drawer are
+  unchanged. 61 end-to-end checks passed. The e2e probe read the parent's
+  inline value — the element the regression was written to — so it is now an
+  assertion on the width actually resolved for the transcript.
+
 ## [2.0.3] - 2026-11-19
 
 ### Changed

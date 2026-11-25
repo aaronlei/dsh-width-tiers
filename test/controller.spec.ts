@@ -143,7 +143,7 @@ describe("width tiers controller", () => {
 		expect(state.tier).toBe("wide");
 		expect(state.menuOpen).toBe(false);
 		expect(state.items.find((item) => item.id === "wide")?.selected).toBe(true);
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1280px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1280px");
 		expect(localStorage.getItem(APP_PREF_KEY)).toBe("1280");
 		expect(document.body.getAttribute(TIER_ATTR)).toBe("wide");
 		expect(sidebarCollapsed).toBe(false);
@@ -157,9 +157,44 @@ describe("width tiers controller", () => {
 		expect(state.tier).toBe("medium");
 		expect(state.menuOpen).toBe(false);
 		expect(state.pulse).toBeGreaterThan(0);
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1120px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1120px");
 		expect(localStorage.getItem(APP_PREF_KEY)).toBe("1120");
 		expect(localStorage.getItem(KEY)).toBe("medium");
+	});
+
+	it("publishes the width on the element that resolves it, not its parent", () => {
+		/* DSH 0.2.3 registers `--dsh-chat-user-width` with `inherits: false`, so a
+		 * value on the parent never reaches the `var()` that resolves the
+		 * transcript width; writing there silently kept the app default. */
+		const c = makeController();
+		c.actions.selectTier("wide");
+
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1280px");
+		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("");
+	});
+
+	it("follows the current width when the tier is picked before any resize", () => {
+		/* Selecting a fixed tier must land on the width axis immediately: nothing
+		 * about it changes the column, so no app-side republish follows. */
+		const c = makeController();
+		c.actions.selectTier("ultra");
+
+		expect(c.source.getSnapshot().button.value).toBe("1400px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1400px");
+		expect(resizeCallback).not.toBeNull();
+	});
+
+	it("reads a width an older client published on the parent", () => {
+		/* Clients before 0.2.3 published on `root.parentElement`, where the
+		 * property still inherited. A drag recorded there must stay readable. */
+		column.style.setProperty("--dsh-chat-user-width", "1000px");
+
+		const c = makeController();
+		c.actions.selectTier("custom");
+		handle.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+		handle.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+
+		expect(localStorage.getItem(CUSTOM_KEY)).toBe("1000");
 	});
 
 	it("collapses the sidebar for full and restores it for standard", () => {
@@ -167,12 +202,12 @@ describe("width tiers controller", () => {
 
 		c.actions.selectTier("full");
 		expect(sidebarCollapsed).toBe(true);
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1824px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1824px");
 		expect(localStorage.getItem(APP_PREF_KEY)).toBe("1824");
 
 		c.actions.selectTier("standard");
 		expect(sidebarCollapsed).toBe(false);
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("");
 		expect(localStorage.getItem(APP_PREF_KEY)).toBeNull();
 		expect(c.source.getSnapshot().tier).toBe("standard");
 	});
@@ -206,7 +241,7 @@ describe("width tiers controller", () => {
 		expect(state.guide.dragging).toBe(true);
 		expect(localStorage.getItem(KEY)).toBe("custom");
 
-		column.style.setProperty("--dsh-chat-user-width", "1100px");
+		root.style.setProperty("--dsh-chat-user-width", "1100px");
 		handle.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
 
 		state = c.source.getSnapshot();
@@ -233,7 +268,7 @@ describe("width tiers controller", () => {
 		window.dispatchEvent(new StorageEvent("storage", { key: KEY, newValue: "ultra" }));
 
 		expect(c.source.getSnapshot().tier).toBe("ultra");
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1400px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1400px");
 		expect(localStorage.getItem(APP_PREF_KEY)).toBe("1400");
 	});
 
@@ -250,12 +285,12 @@ describe("width tiers controller", () => {
 	it("follows the column width while full is selected", () => {
 		localStorage.setItem(KEY, "full");
 		const c = makeController();
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1824px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1824px");
 
 		Object.defineProperty(root, "offsetWidth", { configurable: true, value: 1600 });
 		resizeCallback?.([], {} as ResizeObserver);
 		expect(c.source.getSnapshot().tier).toBe("full");
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1424px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1424px");
 	});
 
 	it("does not pin a zero-layout root to the clamp floor", () => {
@@ -264,7 +299,7 @@ describe("width tiers controller", () => {
 		const c = makeController();
 
 		expect(c.source.getSnapshot().tier).toBe("full");
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("");
 		expect(localStorage.getItem(APP_PREF_KEY)).toBeNull();
 	});
 
@@ -276,7 +311,7 @@ describe("width tiers controller", () => {
 		expect(state.tier).toBe("custom");
 		expect(state.button.active).toBe(true);
 		expect(state.items.find((item) => item.id === "custom")?.value).toBe("1000px");
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("1000px");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("1000px");
 		expect(localStorage.getItem(KEY)).toBe("custom");
 		expect(localStorage.getItem(CUSTOM_KEY)).toBe("1000");
 	});
@@ -302,7 +337,7 @@ describe("width tiers controller", () => {
 		handle.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
 		expect(c.source.getSnapshot().guide.announcement).toBe("");
 
-		column.style.setProperty("--dsh-chat-user-width", "1000px");
+		root.style.setProperty("--dsh-chat-user-width", "1000px");
 		handle.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
 
 		expect(c.source.getSnapshot().guide.announcement).toBe(
@@ -418,7 +453,7 @@ describe("width tiers controller", () => {
 		c.dispose();
 		controller = undefined;
 		expect(sidebarCollapsed).toBe(false);
-		expect(column.style.getPropertyValue("--dsh-chat-user-width")).toBe("");
+		expect(root.style.getPropertyValue("--dsh-chat-user-width")).toBe("");
 		expect(localStorage.getItem(APP_PREF_KEY)).toBeNull();
 		expect(document.body.getAttribute(TIER_ATTR)).toBeNull();
 		expect(document.querySelector('style[data-plugin="dsh-width-tiers"]')).toBeNull();

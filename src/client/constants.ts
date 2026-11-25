@@ -22,10 +22,10 @@ export const NOMINAL_WIDTH_PX = {
 	ultra: 1400,
 } as const;
 
-/* The app's no-preference formula: clamp(680px, column × 0.64, 920px).
+/* The app's no-preference formula: clamp(680px, column × 0.64, 880px).
  * Used as the last-resort live readout before the first drag. */
 export const DEFAULT_MIN_PX = 680;
-export const DEFAULT_MAX_PX = 920;
+export const DEFAULT_MAX_PX = 880;
 export const DEFAULT_COLUMN_RATIO = 0.64;
 
 /** How long attach waits before falling back to a slow retry. */

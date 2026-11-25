@@ -24,7 +24,7 @@ import {
 	type TierId,
 } from "./model.ts";
 import { installStyles } from "./styles.ts";
-import { createWidthRootLocator, liveWidthPx, widthTarget } from "./width-root.ts";
+import { createWidthRootLocator, inlineUserWidth, liveWidthPx, USER_WIDTH_VAR } from "./width-root.ts";
 import type {
 	PickerActions,
 	PickerGuideStyle,
@@ -276,7 +276,9 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	function applyContentWidth(tier: TierId): void {
 		const root = roots.find();
 		if (root === null) return;
-		const target = widthTarget(root);
+		/* Write on the root itself: it declares `--dsh-chat-content-width`, and
+		 * the app registers `--dsh-chat-user-width` as non-inherited, so a value
+		 * on an ancestor never reaches the `var()` that resolves it. */
 		/* custom before the first drag has no width of its own — leave whatever
 		 * the app last published in place. */
 		if (tier === "custom" && readNumber(CUSTOM_KEY) === null) return;
@@ -285,11 +287,8 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			/* standard: hand the width back to the app default. The app's width
 			 * preference is cleared as well; standard is deliberately the reset
 			 * to the app's default width. */
-			if (
-				target.style.getPropertyValue("--dsh-chat-user-width") !== "" ||
-				preferenceOwned
-			) {
-				target.style.removeProperty("--dsh-chat-user-width");
+			if (root.style.getPropertyValue(USER_WIDTH_VAR) !== "" || preferenceOwned) {
+				root.style.removeProperty(USER_WIDTH_VAR);
 				try {
 					window.localStorage.removeItem(APP_PREF_KEY);
 				} catch {
@@ -309,8 +308,8 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			const px = appliedTierPx(tier, root.offsetWidth, readNumber(CUSTOM_KEY));
 			if (px !== null) {
 				const next = String(Math.round(px));
-				if (target.style.getPropertyValue("--dsh-chat-user-width") !== next + "px") {
-					target.style.setProperty("--dsh-chat-user-width", next + "px");
+				if (root.style.getPropertyValue(USER_WIDTH_VAR) !== next + "px") {
+					root.style.setProperty(USER_WIDTH_VAR, next + "px");
 				}
 			}
 		}
@@ -522,10 +521,8 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 		if (!isHandleEvent(e)) return;
 		const root = roots.find();
 		if (root !== null) {
-			const px = Number.parseFloat(
-				widthTarget(root).style.getPropertyValue("--dsh-chat-user-width"),
-			);
-			if (Number.isFinite(px) && px > 0) {
+			const px = inlineUserWidth(root);
+			if (px !== null) {
 				try {
 					window.localStorage.setItem(CUSTOM_KEY, String(Math.round(px)));
 				} catch {
@@ -718,7 +715,7 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 	 * ResizeObserver. */
 	function observeWidthTarget(root: HTMLElement): void {
 		if (typeof ResizeObserver === "undefined") return;
-		const target = widthTarget(root);
+		const target = root;
 		if (target === observedTarget && widthObserver !== null) return;
 		if (widthObserver !== null) {
 			widthObserver.disconnect();
@@ -923,10 +920,12 @@ export function createWidthTiers(options: WidthTiersOptions): WidthTiersControll
 			removeStyles();
 			/* Hand the width back to the app default. Only a value this plugin
 			 * wrote is removed, so a native drag preference that predates the
-			 * plugin survives unload. */
+			 * plugin survives unload. Earlier releases wrote the parent, so both
+			 * are cleared. */
 			const root = roots.cached();
 			if (root !== null) {
-				widthTarget(root).style.removeProperty("--dsh-chat-user-width");
+				root.style.removeProperty(USER_WIDTH_VAR);
+				root.parentElement?.style.removeProperty(USER_WIDTH_VAR);
 			}
 			if (preferenceOwned) {
 				try {

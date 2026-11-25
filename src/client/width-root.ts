@@ -13,14 +13,27 @@ export function isSidebarConversation(el: Element): boolean {
 	return typeof el.closest === "function" && el.closest("[data-sidebar-chat]") !== null;
 }
 
+/** The inline custom property carrying the transcript width preference (px). */
+export const USER_WIDTH_VAR = "--dsh-chat-user-width";
+
 /**
- * The element the app's ConversationWidthControls publishes
- * `--dsh-conversation-column-width` / `--dsh-chat-user-width` on.
+ * Read the width published inline for the transcript.
+ *
+ * It has to sit on the element that declares `--dsh-chat-content-width`:
+ * DSH 0.2.3 registers `--dsh-chat-user-width` with `inherits: false`, so a
+ * value written on an ancestor never reaches the `var()` that resolves below
+ * it. Clients before 0.2.3 published on that element's parent (the property
+ * still inherited then), so both are read, nearest first.
  * @param root - element that declares `--dsh-chat-content-width`.
- * @returns the parent element, or the root itself when detached.
+ * @returns the published width in px, or null when none is set.
  */
-export function widthTarget(root: HTMLElement): HTMLElement {
-	return root.parentElement ?? root;
+export function inlineUserWidth(root: HTMLElement): number | null {
+	for (const el of [root, root.parentElement]) {
+		if (el === null) continue;
+		const px = Number.parseFloat(el.style.getPropertyValue(USER_WIDTH_VAR));
+		if (Number.isFinite(px) && px > 0) return px;
+	}
+	return null;
 }
 
 /** Locate the element that declares `--dsh-chat-content-width` at runtime. */
@@ -133,13 +146,12 @@ export function createWidthRootLocator(): WidthRootLocator {
 
 /* The transcript width the app currently resolves for the live column (after
  * its own clamp), used by the custom-drag guide. During a drag the app writes
- * the clamped px to the target's inline `--dsh-chat-user-width`, so reading
- * that is exact and avoids relying on how a browser serializes a computed
- * custom property (which may stay as a var()/clamp() token stream). */
+ * the clamped px inline, so reading that is exact and avoids relying on how a
+ * browser serializes a computed custom property (which may stay as a
+ * var()/clamp() token stream). */
 export function liveWidthPx(root: HTMLElement): number {
-	const target = widthTarget(root);
-	const inline = Number.parseFloat(target.style.getPropertyValue("--dsh-chat-user-width"));
-	if (Number.isFinite(inline) && inline > 0) return Math.round(inline);
+	const inline = inlineUserWidth(root);
+	if (inline !== null) return Math.round(inline);
 	const raw = getComputedStyle(root).getPropertyValue("--dsh-chat-content-width");
 	const computed = Number.parseFloat(raw);
 	if (Number.isFinite(computed) && computed > 0) return Math.round(computed);

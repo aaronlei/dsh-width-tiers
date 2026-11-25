@@ -129,7 +129,7 @@ export function appliedTierPx(
 /**
  * Resolve the app's default transcript width for a column.
  * @param columnWidth - live width of the app's width column (px).
- * @returns `max(680, min(column × 0.64, 920))`.
+ * @returns `max(680, min(column × 0.64, 880))`.
  */
 export function defaultWidthPx(columnWidth: number): number {
 	return Math.max(

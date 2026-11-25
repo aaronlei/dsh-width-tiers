@@ -18,7 +18,7 @@
 
 | Tier | Content width | Sidebar |
 | --- | --- | --- |
-| Standard 标准 | App default: `max(680px, min(column × 0.64, 920px))` | unchanged |
+| Standard 标准 | App default: `max(680px, min(column × 0.64, 880px))` | unchanged |
 | Medium 中等 | 1120px | unchanged |
 | Wide 宽 | 1280px | unchanged |
 | Ultra 超宽 | 1400px | unchanged |
@@ -27,7 +27,7 @@
 
 Fixed and custom widths are clamped by the app to
 `max(640px, column − 176px)`; the standard tier follows the app default
-(680–920px). The menu always lists each tier's nominal width (1120/1280/1400); only the
+(680–880px). The menu always lists each tier's nominal width (1120/1280/1400); only the
 button shows the width actually applied after the clamp (on an 800px column,
 Wide reads 1120px in the menu and 640px on the button once selected).
 `Full` follows the live column maximum and is marked as hiding the left
@@ -83,7 +83,9 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
   rebuilding observers.
 - Locates the conversation body that declares `--dsh-chat-content-width`
   (prefers `[data-conversation-content]`, skips the right sidebar's embedded
-  conversation), then writes `--dsh-chat-user-width` on its parent.
+  conversation) and writes `--dsh-chat-user-width` on that element itself: from
+  DSH 0.2.3 the property is registered with `inherits: false`, so a value on an
+  ancestor never reaches the `var()` that resolves it.
 - Stores the configured target in the app preference; only the inline width is
   clamped to `max(640px, column − 176px)`.
 - Watches the column with `ResizeObserver` so `full` follows sidebar, rightbar
@@ -93,9 +95,9 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 ## Compatibility
 
 - DSH Web 0.2.x with a `web` profile (`shell.overlay` slot and `slots` service).
-- Width axis checked against DSH 0.2.2-rc.3 in the live Web UI: 640px floor,
-  176px handle budget, `--dsh-chat-*` variables, `data-width-handle`,
-  layout/locale services.
+- Width axis checked against DSH 0.2.3-alpha.2 and 0.2.2-rc.3 in the live Web
+  UI: 640px floor, 176px handle budget, `--dsh-chat-*` variables,
+  `data-width-handle`, layout/locale services.
 - Narrow screens: the picker hides while the sidebar drawer
   (`data-sidebar-drawer`) is open and follows the on-screen keyboard.
 

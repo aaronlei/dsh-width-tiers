@@ -18,7 +18,7 @@
 
 | 档位 | 内容宽度 | 侧边栏 |
 | --- | --- | --- |
-| 标准 | 应用默认：`max(680px, min(列宽 × 0.64, 920px))` | 不动 |
+| 标准 | 应用默认：`max(680px, min(列宽 × 0.64, 880px))` | 不动 |
 | 中等 | 1120px | 不动 |
 | 宽 | 1280px | 不动 |
 | 超宽 | 1400px | 不动 |
@@ -26,7 +26,7 @@
 | 自定义 | 原生拖拽记录的宽度 | 不动 |
 
 固定档和自定义宽度会被应用钳制到 `max(640px, 列宽 − 176px)`；标准档
-使用应用默认的 680–920px。菜单按档位定义显示名义宽度（1120/1280/1400），
+使用应用默认的 680–880px。菜单按档位定义显示名义宽度（1120/1280/1400），
 只有按钮显示钳制后的实际宽度（例如 800px 列宽下「宽」在菜单里是 1280px，
 选中后按钮显示 640px）。「全宽」跟随当前列宽最大值并标注「收起侧栏」，
 因此选中它后列宽变大，它自己的数值也会随之变化。
@@ -75,8 +75,9 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 - controller 发布不可变快照（档位、菜单、引导），React picker 只负责渲染并
   派发动作；视图重挂载不需要重建观察者。
 - 定位声明 `--dsh-chat-content-width` 的对话 body（优先
-  `[data-conversation-content]`，跳过右侧栏的 embedded 对话），在它的
-  父级写入 `--dsh-chat-user-width`。
+  `[data-conversation-content]`，跳过右侧栏的 embedded 对话），在该元素
+  自身上写入 `--dsh-chat-user-width`：DSH 0.2.3 起这个自定义属性注册为
+  `inherits: false`，写在父级不会到达解析它的 `var()`。
 - 应用偏好保存设定值，只有行内宽度按 `max(640px, 列宽 − 176px)` 钳制。
 - 用 `ResizeObserver` 观察列宽，让「全宽」跟随左右栏与窗口变化。
 - 面板操作走 `ctx.layout`，文案注册走 `ctx.locale`。
@@ -84,7 +85,7 @@ dsh plugin --profile web add link:/path/to/dsh-width-tiers
 ## 兼容性
 
 - DSH Web 0.2.x，带 `web` profile（`shell.overlay` 插槽与 `slots` 服务）。
-- 宽度轴已按 DSH 0.2.2-rc.3 在真实 Web UI 中实测：640px 下限、176px 手柄预留、
+- 宽度轴已按 DSH 0.2.3-alpha.2 与 0.2.2-rc.3 在真实 Web UI 中实测：640px 下限、176px 手柄预留、
   `--dsh-chat-*` 变量、`data-width-handle`、layout/locale 服务。
 - 窄屏适配侧栏抽屉（`data-sidebar-drawer`）：抽屉打开时隐藏选择器；
   软键盘弹出时按钮与菜单随之上移。
